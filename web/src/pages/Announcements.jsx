@@ -1,13 +1,13 @@
 import React from 'react';
 import {socket} from '../lib/socket';
 
-export default function Announcements({room}) {
+export default function Announcements({room, player}) {
 
     const announcements = ['Clubs', 'Diamonds', 'Hearts', 'Spades', 'No Trumps', 'All Trumps', 'Pass'];
 
     const selectColor = (announcement) => {
         console.log(announcement);
-        socket.emit('announce', announcement);
+        socket.emit('announce', announcement, player);
     }   
 
   return (

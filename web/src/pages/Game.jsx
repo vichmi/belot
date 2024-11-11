@@ -16,6 +16,7 @@ export default function Game({init_room, player}) {
     const [userIndex, setUserIndex] = useState(room.players.findIndex(p => p.id == player.id));
     const [tableCards, setTableCards] = useState([]);
     const [iSplit, setISplit] = useState(false);
+    const [takeHand, setTakeHand] = useState();
 
     const sortCards = (cardA, cardB) => {
         const colorStrength = ['spades', 'hearts', 'diamonds', 'clubs'];
@@ -51,7 +52,7 @@ export default function Game({init_room, player}) {
         let firstPlayer = initialPlayerIndex + 1 >= 4 ? 0 : initialPlayerIndex + 1;
         let secondPlayer = initialPlayerIndex + 2 >= 4 ? initialPlayerIndex - 2 : initialPlayerIndex + 2;
         let thirdPlayer = initialPlayerIndex + 3 >= 4 ? initialPlayerIndex - 1 : initialPlayerIndex + 3;
-        console.log([player, r.players[firstPlayer], r.players[secondPlayer], r.players[thirdPlayer]])
+        // console.log([player, r.players[firstPlayer], r.players[secondPlayer], r.players[thirdPlayer]])
         setPlayers([r.players[initialPlayerIndex], r.players[firstPlayer], r.players[secondPlayer], r.players[thirdPlayer]]);
     }
 
@@ -95,8 +96,10 @@ export default function Game({init_room, player}) {
             setCards(room.players[userIndex].handCards.sort(sortCards));
         });
 
-        socket.on('player card', card => {
-            setTableCards([...tableCards, card]);
+        socket.on('play card', r => {
+            setRoom(r);
+            setCards(r.players[userIndex].handCards.sort(sortCards));
+            console.log(r);
         });
     }, []);
 
@@ -104,10 +107,16 @@ export default function Game({init_room, player}) {
         <div className='Game'>
             <div className='main-player box'>
                 {players[0].isDealer ? <span><b>D</b></span> : <></>}
+                {userIndex == room.turn ? <span><b>Your turn</b></span> : <></>}
                 {cards.length >= 1 ? 
                     <div className='card-container'>
                         {cards.map((card, index) => {
-                            return <img className='card' onClick={() => selectCard(card)} key={index} src={require(`../assets/${card.img.toLowerCase()}`)} alt={card.name} width={60} height={80} />
+                            return <img className='card' onClick={() => {
+                                if(room.turn == userIndex) {
+                                    console.log(room);
+                                    socket.emit('play card', card);
+                                }
+                            }} key={index} src={require(`../assets/${card.img.toLowerCase()}`)} alt={card.name} width={60} height={80} />
                         })}
                     </div>
                 :<></>}
@@ -136,13 +145,22 @@ export default function Game({init_room, player}) {
                 </div>
                 :<></>}
 
+                {room.gameStage == 'score' ? 
+                <div className='score'>
+                    {room.teams.map((t, index) => {
+                        return (
+                            <p key={index}>Team {index} has {t.gameScore}</p>
+                        )
+                    })}
+                </div> : <></>}
+
                 {userIndex == room.turn && room.gameStage == 'announcements' ? 
-                    <Announcements room={room} />
+                    <Announcements room={room} plyaer={player} />
                 :<></>}
 
-                {userIndex == room.turn && room.gameStage == 'playing' ? <div>
-                    
-                </div> : <></>}
+                {room.gameStage == 'playing' && room.table.length > 0 ? room.table.map((card, index) => {
+                    return <img key={index} className='card' src={require(`../assets/${card.card.img}`)} alt={card.card.img} width={60} height={80} />
+                }) : <></>}
             </div>
         </div>
     )
