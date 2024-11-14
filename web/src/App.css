@@ -37,6 +37,7 @@ body, html {
     height: 100px;
     position: absolute;
     flex-direction: column;
+    
 }
 
 .main-player {
@@ -122,3 +123,39 @@ body, html {
     font-size: 36px;
 }
 
+.table-container {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    top: 50%;
+    background-color: rgb(44, 101, 139);
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: grid;
+    grid-template-areas:
+        "top top top"
+        "left center right"
+        "bottom bottom bottom";
+    justify-content: center;
+    align-items: center;
+}
+
+.card-placement0 { /* Bottom Center */
+    grid-area: bottom;
+    transform: translateY(10px);
+}
+
+.card-placement1 { /* Right Center */
+    grid-area: right;
+    transform: translateX(120px);
+}
+
+.card-placement2 { /* Top Center */
+    grid-area: top;
+    transform: translateY(-10px);
+}
+
+.card-placement3 { /* Left Center */
+    grid-area: left;
+    transform: translateX(-120px);
+}
