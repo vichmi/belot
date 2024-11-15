@@ -161,8 +161,7 @@ export default function Game({init_room, player}) {
                     {room.gameStage == 'playing' && room.table.length > 0 ? 
                     <div className='table-container'>
                         {room.table.map((card, i) => {
-                            let index = players.findIndex(card.player);
-                            console.log(index)
+                            let index = players.findIndex(p => p.id == card.player.id);
                             return (
                                     <img key={i} className={`card card-placement${index}`} src={require(`../assets/${card.card.img}`)} alt={card.card.img} width={60} height={80} />
                                 

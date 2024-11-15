@@ -151,12 +151,13 @@ module.exports = class Room {
             return;
         }
 
-        if(this.gameType == 'No Trumps') {
+        if(card.color != this.table[0].card.color) {
             // Checks if the played card color is the same as the first played card
-            if(card.color != this.table[0].card.color) {
-                let haveColor = player.handCards.find(c => c.color == this.table[0].card.color);
-                if(haveColor) {return;}
-            }
+            let haveColor = player.handCards.find(c => c.color == this.table[0].card.color);
+            if(haveColor) {return;}
+        }
+
+        if(this.gameType == 'No Trumps') {
             this.table.push({card, player});
             this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
                 c => !(c.number === card.number && c.color === card.color)
@@ -199,6 +200,11 @@ module.exports = class Room {
             }
 
             io.to(this.id).emit('play card', this); 
+        }else if(this.gameType == 'All Trumps') {
+            const lastCard = this.table.find(t => {t.allTrumps})
+            if(card.color == firstCard.color && card.allTrumps < firstCard.allTrumps) {
+                let haveHigherCard = player.handCards.find(c => c.allTrumps == this.table[0].card.color);
+            }
         }
 
 
