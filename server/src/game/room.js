@@ -16,7 +16,8 @@ module.exports = class Room {
         this.name = name;
         this.players = [];
         this.cards = [];
-        for(let color of ['clubs', 'diamonds', 'hearts', 'spades']) {
+        this.colors = ['clubs', 'diamonds', 'hearts', 'spades'];
+        for(let color of this.colors) {
             for(let card of _cards) {
                 this.cards.push({img: `${card.name}_of_${color}.png`, color, number: card.name, noTrumps: card.noTrumps, allTrumps: card.allTrumps});
             }
@@ -33,6 +34,7 @@ module.exports = class Room {
             {players: [], score: 0, hands: [], gameScore: 0}
         ];
         this.table = [];
+        this.trumpColor = '';
     }
 
     setTeams() {
@@ -112,6 +114,9 @@ module.exports = class Room {
             if(this.currentAnnouncements[announcementsLength - 1] == this.currentAnnouncements[announcementsLength - 2]
                 && this.currentAnnouncements[announcementsLength - 2] == this.currentAnnouncements[announcementsLength - 3]
                 && this.currentAnnouncements[announcementsLength - 1] == 'Pass' && this.currentAnnouncements[announcementsLength - 4] != 'Pass') {
+                    if(this.currentAnnouncements[announcementsLength - 4] != 'All Trumps' || this.currentAnnouncements[announcementsLength - 4] != 'No Trumps') {
+                        this.trumpColor = this.currentAnnouncements[announcementsLength - 4];
+                    }
                     return this.currentAnnouncements[announcementsLength - 4];
             }
         }
@@ -124,10 +129,62 @@ module.exports = class Room {
         }
     }
 
-    scoring() {
-        if(this.gameType == 'No Trumps') {
-
+    scoring(io) {
+        if(this.table.length < 4) {return;}
+        let firstCard = this.table[0];
+        let filteredTable = this.table.filter(hand => (this.gameType != 'No Trumps' && this.gameType != 'All Trumps' && hand.card.color == this.gameType.toLowerCase())
+        || (hand.card.color == firstCard.card.color)) ; // Only the correct color played 
+        // let highestCard = filteredTable.sort((a, b) => this.gameType == 'All Trumps' ? b.card.allTrumps - a.card.allTrumps : this.gameType == 'No Trumps' ? b.card.noTrumps - a.card.noTrumps : this.gameType in this.colors ? )[0];
+        let highestCard, correctPointTaker, maxGamePoints;
+        if(this.gameType.toLowerCase() in this.colors) {
+            maxGamePoints = 162;
+            let findTrump = this.table.find(hand => (hand.card.color == this.gameType.toLowerCase()));
+            correctPointTaker = findTrump ? 'allTrumps' : 'noTrumps';
+        }else{
+            maxGamePoints = this.gameType == 'All Trumps' ? 258 : 260;
+            correctPointTaker = this.gameType == 'All Trumps' ? 'allTrumps' : 'noTrumps';
         }
+        console.log('-------------------------------')
+        console.log(filteredTable);
+        highestCard = filteredTable.sort((a, b) => b.card[correctPointTaker] - a.card[correctPointTaker])[0];
+        console.log('-------------------------------');
+        console.log(highestCard);
+        this.teams[highestCard.player.teamIndex].hands.push(this.table);
+        io.to(this.id).emit('take hand', highestCard.player);
+        this.table = [];
+
+        if(this.teams[0].hands.length + this.teams[1].hands.length == 8) {
+            this.teams[highestCard.player.teamIndex].score += 10;
+            this.gameStage = this.gameStages[4];
+            for(let i=0;i<this.teams.length;i++) {
+                for(let h of this.teams[i].hands) {
+                    for(let c of h) {
+                        this.teams[i].score += c.card[correctPointTaker];
+                    }
+                }
+                this.teams[i].score = this.gameType == 'No Trumps' ? this.teams[i].score * 2 : this.teams[i].score;
+            }
+            let ancTeamIndex = this.announcementPlayer.teamIndex;
+            let otherTeamIndex = this.announcementPlayer.teamIndex == 0 ? 1 : 0;
+            if(this.teams[ancTeamIndex].score >= Math.round(maxGamePoints/2)) {
+                this.teams[ancTeamIndex].gameScore += Math.round(this.teams[ancTeamIndex].score / 10);
+                this.teams[ancTeamIndex].score = 0;
+                this.teams[otherTeamIndex].gameScore += Math.round(this.teams[otherTeamIndex].score / 10); 
+                this.teams[otherTeamIndex].score = 0;
+            }else if(this.teams[ancTeamIndex].hands.length == 0) {
+                this.teams[otherTeamIndex].gameScore += 35;
+                this.teams[otherTeamIndex].score = 0;
+            }else if(this.teams[otherTeamIndex].hands.length == 0) {
+                this.teams[ancTeamIndex].gameScore += 35
+                this.teams[ancTeamIndex].score = 0;
+            }else{
+                this.teams[ancTeamIndex].score = 0;
+                this.teams[otherTeamIndex].gameScore += maxGamePoints == 162 ? 16 : 26;
+                this.teams[otherTeamIndex].score = 0;
+            }
+            io.to(this.id).emit('playing', this);
+        }
+        this.turn = this.players.indexOf(highestCard.player);
     }
 
     playCard(card, player, io) {
@@ -151,62 +208,62 @@ module.exports = class Room {
             return;
         }
 
-        if(card.color != this.table[0].card.color) {
-            // Checks if the played card color is the same as the first played card
-            let haveColor = player.handCards.find(c => c.color == this.table[0].card.color);
-            if(haveColor) {return;}
-        }
-
+        
+        let firstCard = this.table[0].card;
+        // No Trumps
         if(this.gameType == 'No Trumps') {
+            if(card.color != firstCard.color) {
+                let haveColor = player.handCards.find(c => c.color == firstCard.color);
+                if(haveColor) {return;}
+            }
             this.table.push({card, player});
             this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
                 c => !(c.number === card.number && c.color === card.color)
             );
-            if(this.table.length == 4) {
-                let firstCard = this.table[0];
-                let filteredTable = this.table.filter(hand => hand.card.color == firstCard.card.color);
-                let highestCard = filteredTable.sort((a, b) => b.card.noTrumps - a.card.noTrumps)[0];
-                this.teams[highestCard.player.teamIndex].hands.push(this.table);
-                io.to(this.id).emit('take hand', highestCard.player);
-                this.table = [];
-                if(this.teams[0].hands.length + this.teams[1].hands.length == 8) {
-                    this.teams[highestCard.player.teamIndex].score += 10;
-                    this.gameStage = this.gameStages[4];
-                    for(let i=0;i<this.teams.length;i++) {
-                        for(let h of this.teams[i].hands) {
-                            for(let c of h) {
-                                this.teams[i].score += c.card.noTrumps;
-                            }
-                        }
-                        this.teams[i].score *= 2;
-                    }
-                    let ancTeamIndex = this.announcementPlayer.teamIndex;
-                    let otherTeamIndex = this.announcementPlayer.teamIndex == 0 ? 1 : 0;
-                    if(this.teams[ancTeamIndex].score >= 125) {
-                        this.teams[ancTeamIndex].gameScore += Math.round(this.teams[ancTeamIndex].score / 10);
-                        this.teams[ancTeamIndex].score = 0;
-                        this.teams[otherTeamIndex].gameScore += Math.round(this.teams[otherTeamIndex].score / 10); 
-                        this.teams[otherTeamIndex].score = 0;
-                    }else{
-                        this.teams[ancTeamIndex].score = 0;
-                        this.teams[otherTeamIndex].gameScore += 26;
-                        this.teams[otherTeamIndex].score = 0;
-                    }
-                    io.to(this.id).emit('playing', this);
-                }
-                this.turn = this.players.indexOf(highestCard.player);
-            }else{
-                this.nextTurn();
-            }
-
-            io.to(this.id).emit('play card', this); 
+            // All Trumps
         }else if(this.gameType == 'All Trumps') {
-            const lastCard = this.table.find(t => {t.allTrumps})
-            if(card.color == firstCard.color && card.allTrumps < firstCard.allTrumps) {
-                let haveHigherCard = player.handCards.find(c => c.allTrumps == this.table[0].card.color);
+            if(card.color != firstCard.color) {
+                let haveColor = player.handCards.find(c => c.color == firstCard.color);
+                if(haveColor) {return;}
             }
-        }
+            if(card.color == firstCard.color) {
+                let highestCard = Math.max.apply(null, this.table.find(t => t.card.color == firstCard.color).map(c => {return c.allTrumps}));
+                if(card.allTrumps < highestCard) {
+                    let findPlayerHigherCard = player.handCards.find(c => c.allTrumps > card.allTrumps);
+                    if(findPlayerHigherCard) {return;}
+                }
+            }else{
+                let findPlayerSameColor = player.handCards.find(c => c.color == firstCard.color);
+                if(findPlayerSameColor) {return;}
+            }
+            this.table.push({card, player});
+            this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
+                c => !(c.number === card.number && c.color === card.color)
+            );
 
+            // TRUMPS
+        }else{
+            if(card.color != firstCard.color && card.color != this.gameType.toLowerCase()) {
+                let haveColor = player.handCards.find(c => c.color == firstCard.color || c.color == this.gameType.toLowerCase());
+                if(haveColor) {return;}
+            }else if(card.color == this.gameType.toLowerCase()){
+                let haveFirstColor = player.handCards.find(c => c.color == firstCard.color);
+                if(haveFirstColor) {return;}
+                let higherCard = player.handCards.find(c => c.allTrumps > card.allTrumps && c.color == card.color);
+                if(higherCard) {return;}
+            }
+            this.table.push({card, player});
+            this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
+                c => !(c.number === card.number && c.color === card.color)
+            );
+        }
+        console.log(this.teams)
+        if(this.table.length == 4) {
+            this.scoring(io);
+        }else{
+            this.nextTurn();
+        }
+        io.to(this.id).emit('play card', this); 
 
     }
 }
