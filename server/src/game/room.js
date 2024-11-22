@@ -136,55 +136,59 @@ module.exports = class Room {
         || (hand.card.color == firstCard.card.color)) ; // Only the correct color played 
         // let highestCard = filteredTable.sort((a, b) => this.gameType == 'All Trumps' ? b.card.allTrumps - a.card.allTrumps : this.gameType == 'No Trumps' ? b.card.noTrumps - a.card.noTrumps : this.gameType in this.colors ? )[0];
         let highestCard, correctPointTaker, maxGamePoints;
-        if(this.gameType.toLowerCase() in this.colors) {
+        if(this.colors.includes(this.gameType.toLowerCase())) {
             maxGamePoints = 162;
-            let findTrump = this.table.find(hand => (hand.card.color == this.gameType.toLowerCase()));
+            let findTrump = this.table.filter(hand => (hand.card.color == this.gameType.toLowerCase()));
             correctPointTaker = findTrump ? 'allTrumps' : 'noTrumps';
+            if(findTrump.length > 0) {
+                highestCard = this.table.filter(c => c.card.color == this.gameType.toLowerCase()).sort((a, b) => b.card[correctPointTaker] - a.card[correctPointTaker])[0];
+            }else{
+                highestCard = this.table.sort((a, b) => b.card[correctPointTaker] - a.card[correctPointTaker])[0];
+            }
         }else{
             maxGamePoints = this.gameType == 'All Trumps' ? 258 : 260;
             correctPointTaker = this.gameType == 'All Trumps' ? 'allTrumps' : 'noTrumps';
+            highestCard = filteredTable.sort((a, b) => b.card[correctPointTaker] - a.card[correctPointTaker])[0];
         }
-        console.log('-------------------------------')
-        console.log(filteredTable);
-        highestCard = filteredTable.sort((a, b) => b.card[correctPointTaker] - a.card[correctPointTaker])[0];
-        console.log('-------------------------------');
-        console.log(highestCard);
         this.teams[highestCard.player.teamIndex].hands.push(this.table);
-        io.to(this.id).emit('take hand', highestCard.player);
-        this.table = [];
-
-        if(this.teams[0].hands.length + this.teams[1].hands.length == 8) {
-            this.teams[highestCard.player.teamIndex].score += 10;
-            this.gameStage = this.gameStages[4];
-            for(let i=0;i<this.teams.length;i++) {
-                for(let h of this.teams[i].hands) {
-                    for(let c of h) {
-                        this.teams[i].score += c.card[correctPointTaker];
+        io.to(this.id).emit('play card', this);
+        setTimeout(() => {
+            this.table = [];
+    
+            if(this.teams[0].hands.length + this.teams[1].hands.length == 8) {
+                this.teams[highestCard.player.teamIndex].score += 10;
+                this.gameStage = this.gameStages[4];
+                for(let i=0;i<this.teams.length;i++) {
+                    for(let h of this.teams[i].hands) {
+                        for(let c of h) {
+                            this.teams[i].score += c.card[correctPointTaker];
+                        }
                     }
+                    this.teams[i].score = this.gameType == 'No Trumps' ? this.teams[i].score * 2 : this.teams[i].score;
                 }
-                this.teams[i].score = this.gameType == 'No Trumps' ? this.teams[i].score * 2 : this.teams[i].score;
+                let ancTeamIndex = this.announcementPlayer.teamIndex;
+                let otherTeamIndex = this.announcementPlayer.teamIndex == 0 ? 1 : 0;
+                if(this.teams[ancTeamIndex].score >= Math.round(maxGamePoints/2)) {
+                    this.teams[ancTeamIndex].gameScore += Math.round(this.teams[ancTeamIndex].score / 10);
+                    this.teams[ancTeamIndex].score = 0;
+                    this.teams[otherTeamIndex].gameScore += Math.round(this.teams[otherTeamIndex].score / 10); 
+                    this.teams[otherTeamIndex].score = 0;
+                }else if(this.teams[ancTeamIndex].hands.length == 0) {
+                    this.teams[otherTeamIndex].gameScore += 35;
+                    this.teams[otherTeamIndex].score = 0;
+                }else if(this.teams[otherTeamIndex].hands.length == 0) {
+                    this.teams[ancTeamIndex].gameScore += 35
+                    this.teams[ancTeamIndex].score = 0;
+                }else{
+                    this.teams[ancTeamIndex].score = 0;
+                    this.teams[otherTeamIndex].gameScore += maxGamePoints == 162 ? 16 : 26;
+                    this.teams[otherTeamIndex].score = 0;
+                }
+                io.to(this.id).emit('playing', this);
             }
-            let ancTeamIndex = this.announcementPlayer.teamIndex;
-            let otherTeamIndex = this.announcementPlayer.teamIndex == 0 ? 1 : 0;
-            if(this.teams[ancTeamIndex].score >= Math.round(maxGamePoints/2)) {
-                this.teams[ancTeamIndex].gameScore += Math.round(this.teams[ancTeamIndex].score / 10);
-                this.teams[ancTeamIndex].score = 0;
-                this.teams[otherTeamIndex].gameScore += Math.round(this.teams[otherTeamIndex].score / 10); 
-                this.teams[otherTeamIndex].score = 0;
-            }else if(this.teams[ancTeamIndex].hands.length == 0) {
-                this.teams[otherTeamIndex].gameScore += 35;
-                this.teams[otherTeamIndex].score = 0;
-            }else if(this.teams[otherTeamIndex].hands.length == 0) {
-                this.teams[ancTeamIndex].gameScore += 35
-                this.teams[ancTeamIndex].score = 0;
-            }else{
-                this.teams[ancTeamIndex].score = 0;
-                this.teams[otherTeamIndex].gameScore += maxGamePoints == 162 ? 16 : 26;
-                this.teams[otherTeamIndex].score = 0;
-            }
-            io.to(this.id).emit('playing', this);
-        }
-        this.turn = this.players.indexOf(highestCard.player);
+            this.turn = this.players.indexOf(highestCard.player);
+            io.to(this.id).emit('play card', this);
+        }, 1000);
     }
 
     playCard(card, player, io) {
@@ -197,13 +201,10 @@ module.exports = class Room {
 
         if(this.table.length == 0) {
             this.table.push({card, player});
-            console.log(this.players[playerIndex].handCards.filter(c => {c != card}))
             this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
                 c => !(c.number === card.number && c.color === card.color)
             );
             this.nextTurn();
-            // console.log(this.players[playerIndex].handCards.indexOf(card));
-            // this.players[playerIndex].handCards.splice(this.players[playerIndex].handCards.indexOf(card), 1);
             io.to(this.id).emit('play card', this);
             return;
         }
@@ -227,7 +228,9 @@ module.exports = class Room {
                 if(haveColor) {return;}
             }
             if(card.color == firstCard.color) {
-                let highestCard = Math.max.apply(null, this.table.find(t => t.card.color == firstCard.color).map(c => {return c.allTrumps}));
+                // let highestCard = Math.max.apply(null, this.table.find(t => t.card.color == firstCard.color).map(c => {return c.allTrumps}));
+                let findTrump = this.table.filter(c => c.card.color == firstCard.color);
+                let highestCard = findTrump.sort((a, b) => {b.card.allTrumps - a.card.allTrumps})[0];
                 if(card.allTrumps < highestCard) {
                     let findPlayerHigherCard = player.handCards.find(c => c.allTrumps > card.allTrumps);
                     if(findPlayerHigherCard) {return;}
@@ -245,19 +248,50 @@ module.exports = class Room {
         }else{
             if(card.color != firstCard.color && card.color != this.gameType.toLowerCase()) {
                 let haveColor = player.handCards.find(c => c.color == firstCard.color || c.color == this.gameType.toLowerCase());
-                if(haveColor) {return;}
+                let tableHasTrumps = this.table.filter(c => c.card.color == this.gameType.toLowerCase());
+                let teamMateHighest = true;
+                if(tableHasTrumps.length > 0) {
+                    let highestTrump = tableHasTrumps.sort((a, b) => b.card.allTrumps - a.card.allTrumps)[0];
+                    teamMateHighest = highestTrump.player.teamIndex == player.teamIndex ? true : false;
+                }else{
+                    let highestCard = this.table.filter(c => c.card.color == firstCard.color).sort((a, b) => b.card.noTrumps - a.card.noTrumps)[0];
+                    teamMateHighest = highestCard.player.teamIndex == player.teamIndex ? true : false;
+                }
+                if(haveColor && !teamMateHighest) {return;}
             }else if(card.color == this.gameType.toLowerCase()){
-                let haveFirstColor = player.handCards.find(c => c.color == firstCard.color);
+                let haveFirstColor = player.handCards.find(c => c.color == firstCard.color && firstCard.color != this.gameType.toLowerCase());
                 if(haveFirstColor) {return;}
-                let higherCard = player.handCards.find(c => c.allTrumps > card.allTrumps && c.color == card.color);
-                if(higherCard) {return;}
+                let findTrumps = this.table.filter(c => c.card.color == this.gameType.toLowerCase());
+                if(findTrumps.length > 0) {
+                    let highestTrump = findTrumps.sort((a, b) => b.card.allTrumps - a.card.allTrumps)[0];
+                    if(firstCard != this.gameType.toLowerCase()) {
+                        if(card.allTrumps < highestTrump.card.allTrumps && highestTrump.player.teamIndex != player.teamIndex) {
+                            let findPlayerHigherTrump = player.handCards.find(c => c.allTrumps > highestTrump.card.allTrumps && c.color == this.gameType.toLowerCase());
+                            if(findPlayerHigherTrump) {return;}
+                        }
+                    }else{
+                        if(card.allTrumps < highestTrump.card.allTrumps) {
+                            let findPlayerHigherTrump = player.handCards.find(c => c.allTrumps > highestTrump.card.allTrumps && c.color == this.gameType.toLowerCase());
+                            if(findPlayerHigherTrump) {return;}
+                        }
+                    }
+                }
             }
+            // else if(firstCard.color != this.gameType.toLowerCase()) {
+            //     let tableHasTrumps = this.table.filter(c => c.card.color == this.gameType.toLowerCase());
+            //     if(tableHasTrumps.length > 0) {
+            //         let highestTrump = tableHasTrumps.sort((a, b) => b.card.allTrumps - a.card.allTrumps);
+            //         if(highestTrump.player.teamIndex != player.teamIndex) {
+            //             let playerHasHigherTrump = player.handCards.filter(c => c.allTrumps > highestTrump.card.allTrumps);
+
+            //         }
+            //     }
+            // }
             this.table.push({card, player});
             this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
                 c => !(c.number === card.number && c.color === card.color)
             );
         }
-        console.log(this.teams)
         if(this.table.length == 4) {
             this.scoring(io);
         }else{
