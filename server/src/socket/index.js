@@ -71,6 +71,10 @@ module.exports = {
                 playerRoom.gameType = playerRoom.checkAnnouncements();
                 playerRoom.currentAnnouncements = [];
                 playerRoom.dealRestCards();
+                for(let p of playerRoom.players) {
+                    io.to(playerRoom.id).emit('hand announce', `${p.id} has ${p.announcements}`)
+                    p.checkHandAnnouncements();
+                }
                 playerRoom.turn = playerRoom.dealingTurn + 1;
                 io.to(playerRoom.id).emit('playing', playerRoom);
             }else{

@@ -30,11 +30,21 @@ module.exports = class Room {
         this.turn = -1;
         this.dealingTurn = 0;
         this.teams = [
-            {players: [], score: 0, hands: [], gameScore: 0},
-            {players: [], score: 0, hands: [], gameScore: 0}
+            {players: [], score: 0, hands: [], gameScore: 0, announcements: []},
+            {players: [], score: 0, hands: [], gameScore: 0, announcements: []}
         ];
         this.table = [];
         this.trumpColor = '';
+        this.maxGamePoints;
+        this.playerHandAnnouncements = {
+            'belot': 20,
+            'tierce': 20,
+            'quarte': 50,
+            'quinte': 100,
+            'quare': 100,
+            '9-quare': 150,
+            'j-quare': 200
+        }
     }
 
     setTeams() {
@@ -105,6 +115,7 @@ module.exports = class Room {
             this.cards.push(...nextCards);
         }
     }
+
     checkAnnouncements() {
         let announcementsLength = this.currentAnnouncements.length;
         if(this.currentAnnouncements[announcementsLength - 1] == 'All Trumps') {
@@ -122,6 +133,34 @@ module.exports = class Room {
         }
         return false;
     }
+
+    sortHandsAnnouncements() {
+        const announcementsStrength = ['tierce', 'quarte', 'quinte'];
+        let allTeamAnnouncements = [];
+        let teamScoringIndex = -1;
+        for(const team of this.teams) {
+            let teamAnnouncements = [];
+            for(const player of team.players) {
+                const getHighestPlayerAnnouncement = player.announcements.sort((a, b) => {announcementsStrength.indexOf(b.type) - announcementsStrength.indexOf(a.type)})[0];
+                teamAnnouncements.push(getHighestPlayerAnnouncement);
+            }
+            const highestPlayerAnnouncements = teamAnnouncements.sort((a, b) => {announcementsStrength.indexOf(b.type) - announcementsStrength.indexOf(a.type)})[0];
+            allTeamAnnouncements.push(highestPlayerAnnouncements);
+        }
+        if(allTeamAnnouncements[0].type == allTeamAnnouncements[1].type) {
+            if(allTeamAnnouncements[0].cards[allTeamAnnouncements[0].cards.length - 1].number == allTeamAnnouncements[1].cards[allTeamAnnouncements[1].cards.length - 1].number) {
+                return;
+            }
+            let highestCard = allTeamAnnouncements.sort((a, b) => {_cards.indexOf(b.cards[b.cards.length - 1]) - _cards.indexOf(a.cards[a.cards.length - 1]) })[0];
+            teamScoringIndex = allTeamAnnouncements.indexOf(highestCard);
+        }else{
+            const highestTeamAnnouncements = allTeamAnnouncements.sort((a, b) => {announcementsStrength.indexOf(b.type) - announcementsStrength.indexOf(a.type)})[0];
+            teamScoringIndex = allTeamAnnouncements.indexOf(highestTeamAnnouncements);
+        }
+
+        this.teams[teamScoringIndex].announcements = this.teams[teamScoringIndex].players.flatMap(p => p.announcements);
+    }
+
     nextTurn() {
         this.turn++;
         if(this.turn >= 4) {
@@ -135,9 +174,9 @@ module.exports = class Room {
         let filteredTable = this.table.filter(hand => (this.gameType != 'No Trumps' && this.gameType != 'All Trumps' && hand.card.color == this.gameType.toLowerCase())
         || (hand.card.color == firstCard.card.color)) ; // Only the correct color played 
         // let highestCard = filteredTable.sort((a, b) => this.gameType == 'All Trumps' ? b.card.allTrumps - a.card.allTrumps : this.gameType == 'No Trumps' ? b.card.noTrumps - a.card.noTrumps : this.gameType in this.colors ? )[0];
-        let highestCard, correctPointTaker, maxGamePoints;
+        let highestCard, correctPointTaker;
         if(this.colors.includes(this.gameType.toLowerCase())) {
-            maxGamePoints = 162;
+            this.maxGamePoints = 162;
             let findTrump = this.table.filter(hand => (hand.card.color == this.gameType.toLowerCase()));
             correctPointTaker = findTrump ? 'allTrumps' : 'noTrumps';
             if(findTrump.length > 0) {
@@ -146,7 +185,7 @@ module.exports = class Room {
                 highestCard = this.table.sort((a, b) => b.card[correctPointTaker] - a.card[correctPointTaker])[0];
             }
         }else{
-            maxGamePoints = this.gameType == 'All Trumps' ? 258 : 260;
+            this.maxGamePoints = this.gameType == 'All Trumps' ? 258 : 260;
             correctPointTaker = this.gameType == 'All Trumps' ? 'allTrumps' : 'noTrumps';
             highestCard = filteredTable.sort((a, b) => b.card[correctPointTaker] - a.card[correctPointTaker])[0];
         }
@@ -164,11 +203,18 @@ module.exports = class Room {
                             this.teams[i].score += c.card[correctPointTaker];
                         }
                     }
+                    for(let p of this.teams[i].players) {
+                        for(let ann of p.announcements) {
+                            this.teams[i].score += this.playerHandAnnouncements[ann.type];
+                            this.maxGamePoints += this.playerHandAnnouncements[ann.type]/10;
+                        }
+                    }
+                    
                     this.teams[i].score = this.gameType == 'No Trumps' ? this.teams[i].score * 2 : this.teams[i].score;
                 }
                 let ancTeamIndex = this.announcementPlayer.teamIndex;
                 let otherTeamIndex = this.announcementPlayer.teamIndex == 0 ? 1 : 0;
-                if(this.teams[ancTeamIndex].score >= Math.round(maxGamePoints/2)) {
+                if(this.teams[ancTeamIndex].score >= Math.round(this.maxGamePoints/2)) {
                     this.teams[ancTeamIndex].gameScore += Math.round(this.teams[ancTeamIndex].score / 10);
                     this.teams[ancTeamIndex].score = 0;
                     this.teams[otherTeamIndex].gameScore += Math.round(this.teams[otherTeamIndex].score / 10); 
@@ -181,7 +227,7 @@ module.exports = class Room {
                     this.teams[ancTeamIndex].score = 0;
                 }else{
                     this.teams[ancTeamIndex].score = 0;
-                    this.teams[otherTeamIndex].gameScore += maxGamePoints == 162 ? 16 : 26;
+                    this.teams[otherTeamIndex].gameScore += this.maxGamePoints == 162 ? 16 : 26;
                     this.teams[otherTeamIndex].score = 0;
                 }
                 io.to(this.id).emit('playing', this);
@@ -291,6 +337,15 @@ module.exports = class Room {
             this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
                 c => !(c.number === card.number && c.color === card.color)
             );
+        }
+
+        // Checks for belot
+        if(this.gameType != 'No Trumps') {
+            if((card.number == 'q' && player.handCards.some(hCards => hCards.number == 'k' && hCards.color == card.color)) || card.number == 'k' && player.handCards.some(hCards => hCards.number == 'q' && hCards.color == card.color)) {
+                if(this.gameType == 'All Trumps' || this.gameType == card.color) {
+                    io.to(this.id).emit('hand announce', `${player.id} has belot of ${card.color}`);
+                    player.announcements.push({type: 'belot', cards: player.handCards.filter(c => c.number == 'q' || c.number == 'k'), color: card.color})}
+            }
         }
         if(this.table.length == 4) {
             this.scoring(io);

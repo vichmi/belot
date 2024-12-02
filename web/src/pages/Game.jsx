@@ -101,6 +101,8 @@ export default function Game({init_room, player}) {
             setCards(r.players[userIndex].handCards.sort(sortCards));
             console.log(r);
         });
+
+        socket.on('hand announce', msg => {console.log(msg)})
     }, []);
 
     return (
