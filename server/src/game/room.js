@@ -203,13 +203,14 @@ module.exports = class Room {
                             this.teams[i].score += c.card[correctPointTaker];
                         }
                     }
-                    for(let p of this.teams[i].players) {
-                        for(let ann of p.announcements) {
-                            this.teams[i].score += this.playerHandAnnouncements[ann.type];
-                            this.maxGamePoints += this.playerHandAnnouncements[ann.type]/10;
+                    if(this.gameType != 'No Trumps') {
+                        for(let p of this.teams[i].players) {
+                            for(let ann of p.announcements) {
+                                this.teams[i].score += this.playerHandAnnouncements[ann.type];
+                                this.maxGamePoints += this.playerHandAnnouncements[ann.type];
+                            }
                         }
                     }
-                    
                     this.teams[i].score = this.gameType == 'No Trumps' ? this.teams[i].score * 2 : this.teams[i].score;
                 }
                 let ancTeamIndex = this.announcementPlayer.teamIndex;
@@ -221,16 +222,40 @@ module.exports = class Room {
                     this.teams[otherTeamIndex].score = 0;
                 }else if(this.teams[ancTeamIndex].hands.length == 0) {
                     this.teams[otherTeamIndex].gameScore += 35;
+                    
+                    for(let t of this.teams) {
+                        for(let p of t.players) {
+                            for(let ann of p.announcements) {
+                                this.teams[otherTeamIndex].gameScore += this.playerHandAnnouncements[ann.type] / 10;
+                            }
+                        }
+                    }
+
+                    this.teams[otherTeamIndex].gameScore += this.
                     this.teams[otherTeamIndex].score = 0;
                 }else if(this.teams[otherTeamIndex].hands.length == 0) {
                     this.teams[ancTeamIndex].gameScore += 35
+                    for(let p of this.teams[ancTeamIndex].players) {
+                        for(let ann of p.announcements) {
+                            this.teams[ancTeamIndex].gameScore += this.playerHandAnnouncements[ann.type] / 10;
+                        }
+                    }
+
+                    for(let p of this.teams[otherTeamIndex].players) {
+                        for(let ann of p.announcements) {
+                            this.teams[otherTeamIndex].gameScore += this.playerHandAnnouncements[ann.type] / 10;
+                        }
+                    }
+
                     this.teams[ancTeamIndex].score = 0;
                 }else{
                     this.teams[ancTeamIndex].score = 0;
-                    this.teams[otherTeamIndex].gameScore += this.maxGamePoints == 162 ? 16 : 26;
+                    this.teams[otherTeamIndex].gameScore += this.maxGamePoints;
                     this.teams[otherTeamIndex].score = 0;
                 }
-                io.to(this.id).emit('playing', this);
+                this.cards = this.teams[0].hands.concat(this.teams[1].hands);
+                this.gameStage = 'split cards';
+                io.to(this.id).emit('splitting', this);
             }
             this.turn = this.players.indexOf(highestCard.player);
             io.to(this.id).emit('play card', this);
@@ -323,16 +348,6 @@ module.exports = class Room {
                     }
                 }
             }
-            // else if(firstCard.color != this.gameType.toLowerCase()) {
-            //     let tableHasTrumps = this.table.filter(c => c.card.color == this.gameType.toLowerCase());
-            //     if(tableHasTrumps.length > 0) {
-            //         let highestTrump = tableHasTrumps.sort((a, b) => b.card.allTrumps - a.card.allTrumps);
-            //         if(highestTrump.player.teamIndex != player.teamIndex) {
-            //             let playerHasHigherTrump = player.handCards.filter(c => c.allTrumps > highestTrump.card.allTrumps);
-
-            //         }
-            //     }
-            // }
             this.table.push({card, player});
             this.players[playerIndex].handCards = this.players[playerIndex].handCards.filter(
                 c => !(c.number === card.number && c.color === card.color)

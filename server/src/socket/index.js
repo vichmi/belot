@@ -72,8 +72,8 @@ module.exports = {
                 playerRoom.currentAnnouncements = [];
                 playerRoom.dealRestCards();
                 for(let p of playerRoom.players) {
-                    io.to(playerRoom.id).emit('hand announce', `${p.id} has ${p.announcements}`)
                     p.checkHandAnnouncements();
+                    io.to(playerRoom.id).emit('hand announce', `${p.id} has ${JSON.stringify(p.announcements)}`)
                 }
                 playerRoom.turn = playerRoom.dealingTurn + 1;
                 io.to(playerRoom.id).emit('playing', playerRoom);
