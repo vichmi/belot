@@ -17,6 +17,7 @@ export default function Game({init_room, player}) {
     const [tableCards, setTableCards] = useState([]);
     const [iSplit, setISplit] = useState(false);
     const [takeHand, setTakeHand] = useState();
+    const [showAnnouncements, setShowAnnouncement] = useState(false);
 
     const sortCards = (cardA, cardB) => {
         const colorStrength = ['spades', 'hearts', 'diamonds', 'clubs'];
@@ -52,37 +53,51 @@ export default function Game({init_room, player}) {
         let firstPlayer = initialPlayerIndex + 1 >= 4 ? 0 : initialPlayerIndex + 1;
         let secondPlayer = initialPlayerIndex + 2 >= 4 ? initialPlayerIndex - 2 : initialPlayerIndex + 2;
         let thirdPlayer = initialPlayerIndex + 3 >= 4 ? initialPlayerIndex - 1 : initialPlayerIndex + 3;
-        // console.log([player, r.players[firstPlayer], r.players[secondPlayer], r.players[thirdPlayer]])
         setPlayers([r.players[initialPlayerIndex], r.players[firstPlayer], r.players[secondPlayer], r.players[thirdPlayer]]);
     }
 
     useEffect(() => {
         setUserIndex(room.players.findIndex(p => p.id == player.id));
-        socket.on('changes', r => {
+
+        socket.on('playerJoined', (r, _) => {
             setRoom(r);
-            // setPlayers(r.players);
+            setUserIndex(room.players.findIndex(p => p.id == player.id));
             if(r.players.length == 4) {
                 getAndSetPlayers(r);
             }
+        });
+
+        socket.on('gameStarted', r => {
+            setRoom(r);
         })
 
         socket.on('splitting', r => {
             setRoom(r);
             setCards([]);
-            setISplit(r.dealingTurn == userIndex);
-            if(r.dealingTurn == userIndex) {
+            setISplit(r.dealingPlayerIndex == userIndex);
+            console.log(r, userIndex)
+            if(r.dealingPlayerIndex == userIndex) {
                 setISplit(true)
             }else{
                 setISplit(false);
             }
-            console.log(r.dealingTurn, userIndex, r.dealingTurn == userIndex);
         })
 
-        socket.on('dealing', r => {
+        socket.on('initialCardsDealt', r => {
             getAndSetPlayers(r);
             setRoom(r);
             setCards(r.players.filter(p => p.id == player.id)[0].handCards.sort(sortCards));
-            console.log(cards);
+            setShowAnnouncement(true);
+        })
+
+        socket.on('announcementMade', r => {
+            setRoom(r);
+        })
+
+        socket.on('finalCardsDealt', r => {
+            getAndSetPlayers(r);
+            setRoom(r);
+            setCards(r.players.filter(p => p.id == player.id)[0].handCards.sort(sortCards));
         })
 
         socket.on('player disconnected', r => {
@@ -91,7 +106,6 @@ export default function Game({init_room, player}) {
         });
 
         socket.on('playing', room => {
-            console.log(room)
             setRoom(room);
             setCards(room.players[userIndex].handCards.sort(sortCards));
         });
@@ -99,7 +113,6 @@ export default function Game({init_room, player}) {
         socket.on('play card', r => {
             setRoom(r);
             setCards(r.players[userIndex].handCards.sort(sortCards));
-            console.log(r);
         });
 
         socket.on('hand announce', msg => {console.log(msg)})
@@ -107,18 +120,30 @@ export default function Game({init_room, player}) {
 
     return (
         <div className='Game'>
+
+            {/* {room.teams.map((t, index) => {
+                let result = 0;
+                t.hands.map((h, indx) => {
+                    h.map((c, i) => {
+                        result += c.card.allTrumps;
+                    })
+                });
+                return (
+                    <p style={{position: 'absolute', left:0, marginTop: `${index * 50 + 20}px`}}>Team {index} has: {result}</p>
+                )
+            })} */}
+
             <div className='main-player box'>
                 {players[0].isDealer ? <span><b>D</b></span> : <></>}
-                {userIndex == room.turn ? <span><b>Your turn</b></span> : <></>}
+                {userIndex == room.turnIndex ? <span><b>Your turn</b></span> : <></>}
                 {cards.length >= 1 ? 
                     <div className='card-container'>
                         {cards.map((card, index) => {
                             return <img className='card' onClick={() => {
                                 if(room.turn == userIndex) {
-                                    console.log(room);
                                     socket.emit('play card', card);
                                 }
-                            }} key={index} src={require(`../assets/${card.img.toLowerCase()}`)} alt={card.name} width={60} height={80} />
+                            }} key={index} src={require(`../assets/${card.rank.toLowerCase()}_of_${card.suit.toLowerCase()}.png`)} alt={`${card.rank} ${card.suit}`} width={60} height={80} />
                         })}
                     </div>
                 :<></>}
@@ -156,7 +181,7 @@ export default function Game({init_room, player}) {
                     })}
                 </div> : <></>}
 
-                {userIndex == room.turn && room.gameStage == 'announcements' ? 
+                {userIndex == room.turnIndex && showAnnouncements ? 
                     <Announcements room={room} plyaer={player} />
                 :<></>}
                 {/* <div className='table-container'> */}

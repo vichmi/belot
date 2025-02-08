@@ -3,7 +3,7 @@ module.exports = class Player {
         this.id = id;
         this.isDealer = false;
         this.handCards = []
-        this.teamIndex = -1;
+        this.team;
         this.announcements = [];
     }
     

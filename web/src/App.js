@@ -15,7 +15,7 @@ function App() {
       setRooms(rooms);
     });
 
-    socket.on('joined room', (room, player) => {
+    socket.on('userJoined', (room, player) => {
       setRoom(room);
       setPlayer(player);
     })
