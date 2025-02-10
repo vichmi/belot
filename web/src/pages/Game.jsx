@@ -1,202 +1,263 @@
+// src/components/Game.jsx
 import React, { useEffect, useState } from 'react';
-import {socket} from '../lib/socket';
+import { socket } from '../lib/socket';
 import Announcements from './Announcements';
-// const images = [];
 
-const unknownCards = [];
-for(let i=0;i<32;i++) {
-    unknownCards.push(1);
-}
+// Create an array of placeholders for unknown card images.
+const unknownCards = Array.from({ length: 32 }, (_, i) => i);
 
-export default function Game({init_room, player}) {
+export default function Game({ init_room, player }) {
+  const [room, setRoom] = useState(init_room);
+  const [players, setPlayers] = useState(init_room.players || []);
+  const [cards, setCards] = useState([]);
+  const [userIndex, setUserIndex] = useState(
+    init_room.players ? init_room.players.findIndex(p => p.id === player.id) : 0
+  );
+  const [tableCards, setTableCards] = useState([]);
+  const [iSplit, setISplit] = useState(false);
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
+  const [firstPlacedCard, setFirstPlacedCard] = useState();
 
-    const [room, setRoom] = useState(init_room)
-    const [players, setPlayers] = useState(room.players);
-    const [cards, setCards] = useState([]);
-    const [userIndex, setUserIndex] = useState(room.players.findIndex(p => p.id == player.id));
-    const [tableCards, setTableCards] = useState([]);
-    const [iSplit, setISplit] = useState(false);
-    const [takeHand, setTakeHand] = useState();
-    const [showAnnouncements, setShowAnnouncement] = useState(false);
+  // Helper: Sort cards by suit then by rank.
+  const sortCards = (cardA, cardB) => {
+    if (!cardA && !cardB) return 0;
+    if (!cardA) return 1;
+    if (!cardB) return -1;
+    const suitOrder = ['spades', 'hearts', 'diamonds', 'clubs'];
+    const suitIndexA = suitOrder.indexOf(cardA.suit);
+    const suitIndexB = suitOrder.indexOf(cardB.suit);
+    if (suitIndexA !== suitIndexB) {
+      return suitIndexA - suitIndexB;
+    }
+    const rankOrder = { '7': 1, '8': 2, '9': 3, '10': 4, 'J': 5, 'Q': 6, 'K': 7, 'A': 8 };
+    return rankOrder[cardA.rank] - rankOrder[cardB.rank];
+  };
 
-    const sortCards = (cardA, cardB) => {
-        const colorStrength = ['spades', 'hearts', 'diamonds', 'clubs'];
-        
-        const colorA = cardA.color;
-        const colorB = cardB.color;
+  // Reorder players so that the local player is first.
+  const reorderPlayers = (r) => {
+    const idx = r.players.findIndex(p => p.id === player.id);
+    if (idx < 0) return;
+    const reordered = [];
+    for (let i = 0; i < r.players.length; i++) {
+      reordered.push(r.players[(idx + i) % r.players.length]);
+    }
+    setPlayers(reordered);
+  };
 
-        let strengthA = cardA.noTrumps;
-        let strengthB = cardB.noTrumps;
-
-        if(room.gameType == 'All Trumps') {
-            strengthA = cardA.allTrumps;
-            strengthB = cardB.allTrumps;
-        }
-
-        const colorIndexA = colorStrength.indexOf(colorA);
-        const colorIndexB = colorStrength.indexOf(colorB);
-
-        if(colorIndexA != colorIndexB) {
-            return colorIndexA - colorIndexB;
-        }
-        return strengthA - strengthB;
+  useEffect(() => {
+    if (room && room.players) {
+      setUserIndex(room.players.findIndex(p => p.id === player.id));
     }
 
-    const selectCard = card => {
-        if(room.turn == userIndex && room.gameStage == 'playing') {
-            socket.emit('play card', card);
-        }
+    socket.on('playerJoined', (data) => {
+      const r = data.room;
+      setRoom(r);
+      if (r.players.length === 4) {
+        reorderPlayers(r);
+      }
+    });
+
+    socket.on('splitting', (data) => {
+      const r = data.room;
+      setShowAnnouncements(false);
+      setRoom(r);
+      setCards([]);
+      if (r.dealingPlayerIndex !== undefined && r.players[r.dealingPlayerIndex]?.id === player.id) {
+        setISplit(true);
+      } else {
+        setISplit(false);
+      }
+    });
+
+    socket.on('initialCardsDealt', (data) => {
+      const r = data.room;
+      reorderPlayers(r);
+      setRoom(r);
+      const myPlayer = r.players.find(p => p.id === player.id);
+      if (myPlayer && myPlayer.hand) {
+        // console.log()
+        setCards(myPlayer.hand.filter(card => card != null).sort(sortCards));
+        console.log(cards);
+      }
+      setShowAnnouncements(true);
+    });
+
+    socket.on('restCardsDealt', (data) => {
+      const r = data.room;
+      reorderPlayers(r);
+      setRoom(r);
+      setShowAnnouncements(false);
+      const myPlayer = r.players.find(p => p.id === player.id);
+      if (myPlayer && myPlayer.hand) {
+        setCards(myPlayer.hand.filter(card => card != null).sort(sortCards));
+      }
+      console.log(cards);
+    });
+
+    socket.on('announcementMade', (data) => {
+      setRoom(data.room);
+    });
+
+    socket.on('cardPlayed', (data) => {
+      const r = data.room;
+      setRoom(r);
+      setTableCards(data.playedCards);
+      setFirstPlacedCard(data.playedCards[0]);
+      console.log(data.playedCards[0].card);
+      const myPlayer = r.players.find(p => p.id === player.id);
+      if (myPlayer && myPlayer.hand) {
+        setCards(myPlayer.hand.filter(card => card != null).sort(sortCards));
+      }
+    });
+
+    socket.on('trickCompleted', (data) => {
+      setRoom(data.room);
+      setTableCards([]);
+    });
+
+    socket.on('roundEnded', (data) => {
+      setRoom(data.room);
+      // Optionally display scores using data.scores
+    });
+
+    socket.on('roundRestarted', (data) => {
+      setRoom(data.room);
+    });
+
+    socket.on('playerDisconnected', (data) => {
+      setRoom(data.room);
+      setPlayers(data.room.players);
+    });
+
+    socket.on('error', (data) => {
+      console.error("Socket error:", data.message);
+    });
+
+    return () => {
+      socket.off('playerJoined');
+      socket.off('splitting');
+      socket.off('initialCardsDealt');
+      socket.off('restCardsDealt');
+      socket.off('announcementMade');
+      socket.off('cardPlayed');
+      socket.off('trickCompleted');
+      socket.off('roundEnded');
+      socket.off('roundRestarted');
+      socket.off('playerDisconnected');
+      socket.off('error');
     };
+  }, [room, player.id]);
 
-    function getAndSetPlayers(r) {
-        let initialPlayerIndex = r.players.findIndex(p => p.id == player.id);
-        let firstPlayer = initialPlayerIndex + 1 >= 4 ? 0 : initialPlayerIndex + 1;
-        let secondPlayer = initialPlayerIndex + 2 >= 4 ? initialPlayerIndex - 2 : initialPlayerIndex + 2;
-        let thirdPlayer = initialPlayerIndex + 3 >= 4 ? initialPlayerIndex - 1 : initialPlayerIndex + 3;
-        setPlayers([r.players[initialPlayerIndex], r.players[firstPlayer], r.players[secondPlayer], r.players[thirdPlayer]]);
+  // When the local player clicks on a card.
+  const handleCardClick = (card) => {
+    console.log("Playing card:", card);
+    if (room.gameStage === 'playing' && room.turnIndex === userIndex) {
+      socket.emit('play card', card);
     }
+  };
 
-    useEffect(() => {
-        setUserIndex(room.players.findIndex(p => p.id == player.id));
+  // Determine if the local player is the dealer.
+  const isLocalDealer =
+    room &&
+    room.dealingPlayerIndex !== undefined &&
+    room.players[room.dealingPlayerIndex] &&
+    room.players[room.dealingPlayerIndex].id === player.id;
 
-        socket.on('playerJoined', (r, _) => {
-            setRoom(r);
-            setUserIndex(room.players.findIndex(p => p.id == player.id));
-            if(r.players.length == 4) {
-                getAndSetPlayers(r);
-            }
-        });
+  return (
+    <div className="Game">
+      {/* Main Player Display */}
+      <div className="main-player box">
+        {isLocalDealer && <span><b>D</b></span>}
+        {room.turnIndex === userIndex && <span><b>Your turn</b></span>}
+        {cards && cards.length > 0 && (
+          <div className="card-container">
+            {cards.map((card, idx) => (
+              <img
+                key={idx}
+                className={`card ${firstPlacedCard && card.suit == firstPlacedCard.card.suit ? 'highlightCard' : ''}`}
+                // className={`card`}
+                onClick={() => handleCardClick(card)}
+                src={require(`../assets/${card.rank.toLowerCase()}_of_${card.suit.toLowerCase()}.png`)}
+                alt={`${card.rank} ${card.suit}`}
+                width={60}
+                height={80}
+              />
+            ))}
+          </div>
+        )}
+        <span>{player.id}</span>
+      </div>
 
-        socket.on('gameStarted', r => {
-            setRoom(r);
-        })
-
-        socket.on('splitting', r => {
-            setRoom(r);
-            setCards([]);
-            setISplit(r.dealingPlayerIndex == userIndex);
-            console.log(r, userIndex)
-            if(r.dealingPlayerIndex == userIndex) {
-                setISplit(true)
-            }else{
-                setISplit(false);
-            }
-        })
-
-        socket.on('initialCardsDealt', r => {
-            getAndSetPlayers(r);
-            setRoom(r);
-            setCards(r.players.filter(p => p.id == player.id)[0].handCards.sort(sortCards));
-            setShowAnnouncement(true);
-        })
-
-        socket.on('announcementMade', r => {
-            setRoom(r);
-        })
-
-        socket.on('finalCardsDealt', r => {
-            getAndSetPlayers(r);
-            setRoom(r);
-            setCards(r.players.filter(p => p.id == player.id)[0].handCards.sort(sortCards));
-        })
-
-        socket.on('player disconnected', r => {
-            setRoom(r);
-            setPlayers(r.players);
-        });
-
-        socket.on('playing', room => {
-            setRoom(room);
-            setCards(room.players[userIndex].handCards.sort(sortCards));
-        });
-
-        socket.on('play card', r => {
-            setRoom(r);
-            setCards(r.players[userIndex].handCards.sort(sortCards));
-        });
-
-        socket.on('hand announce', msg => {console.log(msg)})
-    }, []);
-
-    return (
-        <div className='Game'>
-
-            {/* {room.teams.map((t, index) => {
-                let result = 0;
-                t.hands.map((h, indx) => {
-                    h.map((c, i) => {
-                        result += c.card.allTrumps;
-                    })
-                });
-                return (
-                    <p style={{position: 'absolute', left:0, marginTop: `${index * 50 + 20}px`}}>Team {index} has: {result}</p>
-                )
-            })} */}
-
-            <div className='main-player box'>
-                {players[0].isDealer ? <span><b>D</b></span> : <></>}
-                {userIndex == room.turnIndex ? <span><b>Your turn</b></span> : <></>}
-                {cards.length >= 1 ? 
-                    <div className='card-container'>
-                        {cards.map((card, index) => {
-                            return <img className='card' onClick={() => {
-                                if(room.turn == userIndex) {
-                                    socket.emit('play card', card);
-                                }
-                            }} key={index} src={require(`../assets/${card.rank.toLowerCase()}_of_${card.suit.toLowerCase()}.png`)} alt={`${card.rank} ${card.suit}`} width={60} height={80} />
-                        })}
-                    </div>
-                :<></>}
-                <span>{player.id}</span>
+      {/* Other Players Display */}
+      {players.length === 4 &&
+        players.map((p, index) => {
+          const isDealer =
+            room &&
+            room.dealingPlayerIndex !== undefined &&
+            room.players[room.dealingPlayerIndex]?.id === p.id;
+          if (index === 0) return null;
+          return (
+            <div key={index} className={`player${index} box`}>
+              {isDealer && <span><b>D</b></span>}
+              <span>{p.id}</span>
             </div>
+          );
+        })}
 
-            {players.length == 4 ? players.map((p, index) => {
-                if(index == 0) return;
-                return (
-                    <div key={index} className={`player${index} box`}>
-                        {p.isDealer ? <span><b>D</b></span> : <></>}
-                        <span>{p.id}</span>
-                    </div>
-                )
-            }) : <></>}
-            <div className='playing-sector box'>
+      {/* Playing Sector */}
+      <div className="playing-sector box">
+        {iSplit && (
+          <div className="splitCards">
+            {unknownCards.map((_, idx) => (
+              <img
+                key={idx}
+                className="card"
+                src={require('../assets/back.png')}
+                alt="unknown card"
+                width={60}
+                height={80}
+                onClick={() => {
+                  socket.emit('splitted card', idx);
+                  setISplit(false);
+                }}
+              />
+            ))}
+          </div>
+        )}
 
-                {iSplit ? 
-                    <div className='splitCards'>
-                        {unknownCards.map((val, index) => {
-                            return <img key={index} className='card' src={require('../assets/back.png')} alt='unknown card' width={60} height={80} onClick={() => {
-                                socket.emit('splitted card', index);
-                                setISplit(false);
-                            }} />
-                        })}
-                </div>
-                :<></>}
+        {/* Optionally display team scores when gameStage is "score" */}
+        {room.gameStage === 'score' && room.teams && (
+          <div className="score">
+            {room.teams.map((t, idx) => (
+              <p key={idx}>Team {idx} has {t.gameScore}</p>
+            ))}
+          </div>
+        )}
 
-                {room.gameStage == 'score' ? 
-                <div className='score'>
-                    {room.teams.map((t, index) => {
-                        return (
-                            <p key={index}>Team {index} has {t.gameScore}</p>
-                        )
-                    })}
-                </div> : <></>}
+        {/* Display bidding announcements if it's the local player's turn */}
+        {room.turnIndex === userIndex && showAnnouncements && (
+          <Announcements room={room} player={player} />
+        )}
 
-                {userIndex == room.turnIndex && showAnnouncements ? 
-                    <Announcements room={room} plyaer={player} />
-                :<></>}
-                {/* <div className='table-container'> */}
-                    {room.gameStage == 'playing' && room.table.length > 0 ? 
-                    <div className='table-container'>
-                        {room.table.map((card, i) => {
-                            let index = players.findIndex(p => p.id == card.player.id);
-                            return (
-                                    <img key={i} className={`card card-placement${index}`} src={require(`../assets/${card.card.img}`)} alt={card.card.img} width={60} height={80} />
-                                
-                            )
-                        })} </div>: <></>
-                    }
-                {/* </div> */}
-            </div>
-        </div>
-    )
+        {/* Display cards played on the table */}
+        {room.playedCards && room.playedCards.length > 0 && (
+          <div className="table-container">
+            {room.playedCards.map((play, idx) => {
+              const pos = room.players.findIndex(p => p.id === play.playerId);
+              return (
+                <img
+                  key={idx}
+                  className={`card card-placement${pos}`}
+                  src={require(`../assets/${play.card.rank.toLowerCase()}_of_${play.card.suit.toLowerCase()}.png`)}
+                  alt={`${play.card.rank} ${play.card.suit}`}
+                  width={60}
+                  height={80}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

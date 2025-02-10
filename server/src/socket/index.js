@@ -1,36 +1,66 @@
+// server/index.js
 const Room = require('../game/room');
 const Player = require('../game/player');
 
+// Create a single room (you can expand this to multiple or dynamic rooms).
 const rooms = [new Room(1, 'Development')];
 
 module.exports = {
-    init(socket, io) {
-        socket.emit('init', rooms);
-        let playerRoom, player;
-        
-        socket.on('join room', room => {
-            playerRoom = rooms.find(r => r.id === room.id);
-            if (!playerRoom || playerRoom.players.length >= 4) return;
+  init(socket, io) {
+    // Send initial room data.
+    socket.emit('init', { rooms });
 
-            player = new Player(socket.id);
-            playerRoom.addPlayer(player, socket, io);
-        });
+    let playerRoom = null;
+    let player = null;
 
-        socket.on('splitted card', cardIndex => {
-            playerRoom.splitDeck(cardIndex, io);
-        });
+    // --- Client-to-Server Events ---
 
-        socket.on('announce', announce => {
-            playerRoom.makeAnnouncement(player.id, announce, io);
-        });
+    // Join room.
+    socket.on('join room', (roomData) => {
+      playerRoom = rooms.find(r => r.id === roomData.id);
+      if (!playerRoom) {
+        return socket.emit('error', { message: "Room not found" });
+      }
+      if (playerRoom.players.length >= 4) {
+        return socket.emit('error', { message: "Room is full" });
+      }
+      player = new Player(socket.id);
+      playerRoom.addPlayer(player, socket, io);
+    });
 
-        socket.on('play card', card => {
-            playerRoom.playCard(player.id, card, io);
-        });
+    // Splitting the deck (called by the dealer).
+    socket.on('splitted card', (cardIndex) => {
+      if (playerRoom) {
+        playerRoom.splitDeck(cardIndex, io);
+      }
+    });
 
-        socket.on('disconnect', () => {
-            if (!playerRoom) return;
-            playerRoom.removePlayer(player, socket, io);
-        });
-    }
+    // Bidding announcement.
+    socket.on('announce', (announcement) => {
+      if (playerRoom && player) {
+        playerRoom.makeAnnouncement(player.id, announcement, io);
+      }
+    });
+
+    // Combination bonus announcement.
+    socket.on('announce combination', (combination) => {
+      if (playerRoom && player) {
+        playerRoom.announceCombination(player.id, combination, io);
+      }
+    });
+
+    // Play a card.
+    socket.on('play card', (card) => {
+      if (playerRoom && player) {
+        playerRoom.playCard(player.id, card, io);
+      }
+    });
+
+    // Disconnect.
+    socket.on('disconnect', () => {
+      if (playerRoom && player) {
+        playerRoom.removePlayer(player, socket, io);
+      }
+    });
+  }
 };

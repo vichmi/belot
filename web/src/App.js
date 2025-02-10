@@ -11,15 +11,20 @@ function App() {
   const [player, setPlayer] = useState({});
 
   useEffect(() => {
-    socket.on('init', rooms => {
+    socket.on('init', ({rooms}) => {
       setRooms(rooms);
     });
 
-    socket.on('userJoined', (room, player) => {
+    socket.on('userJoined', ({room, player}) => {
       setRoom(room);
+      console.log(room);
       setPlayer(player);
     })
     
+    socket.on('error', err => {
+      console.error(err.message);
+    });
+
     return () => {
       socket.off('connect');
     }
