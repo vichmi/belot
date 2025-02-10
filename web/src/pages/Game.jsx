@@ -77,7 +77,6 @@ export default function Game({ init_room, player }) {
       if (myPlayer && myPlayer.hand) {
         // console.log()
         setCards(myPlayer.hand.filter(card => card != null).sort(sortCards));
-        console.log(cards);
       }
       setShowAnnouncements(true);
     });
@@ -91,7 +90,6 @@ export default function Game({ init_room, player }) {
       if (myPlayer && myPlayer.hand) {
         setCards(myPlayer.hand.filter(card => card != null).sort(sortCards));
       }
-      console.log(cards);
     });
 
     socket.on('announcementMade', (data) => {
@@ -112,7 +110,11 @@ export default function Game({ init_room, player }) {
 
     socket.on('trickCompleted', (data) => {
       setRoom(data.room);
-      setTableCards([]);
+      setTableCards(data.playedCards);
+      const myPlayer = data.room.players.find(p => p.id === player.id);
+      if (myPlayer && myPlayer.hand) {
+        setCards(myPlayer.hand.filter(card => card != null).sort(sortCards));
+      }
     });
 
     socket.on('roundEnded', (data) => {
@@ -133,6 +135,10 @@ export default function Game({ init_room, player }) {
       console.error("Socket error:", data.message);
     });
 
+    socket.on('combinationDetected', data => {
+      console.log(data.playerId, data.combination);
+    })
+
     return () => {
       socket.off('playerJoined');
       socket.off('splitting');
@@ -151,6 +157,7 @@ export default function Game({ init_room, player }) {
   // When the local player clicks on a card.
   const handleCardClick = (card) => {
     console.log("Playing card:", card);
+    console.log('Room:', room)
     if (room.gameStage === 'playing' && room.turnIndex === userIndex) {
       socket.emit('play card', card);
     }

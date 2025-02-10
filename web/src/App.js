@@ -17,7 +17,6 @@ function App() {
 
     socket.on('userJoined', ({room, player}) => {
       setRoom(room);
-      console.log(room);
       setPlayer(player);
     })
     

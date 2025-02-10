@@ -21,6 +21,8 @@ module.exports = class Room {
     this.callingTeam = null;
     this.lastHandTeam = null;
     this.gameStage = null;
+    // NEW: Final combination that will be applied for each team.
+    this.finalCombination = { NS: null, EW: null };
   }
 
   // Create a 32–card deck and shuffle it using Fisher–Yates.
@@ -81,7 +83,7 @@ module.exports = class Room {
     if (this.announcements.length === 4 && this.announcements.every(a => a === "pass")) {
       this.deck = this.createDeck();
       // Rotate the dealer anti-clockwise:
-      this.dealingPlayerIndex = (this.dealingPlayerIndex - 1 + 4) % 4;
+      this.dealingPlayerIndex = (this.dealingPlayerIndex + 1) % 4;
       this.announcements = [];
       io.to(this.id).emit("splitting", { room: this });
       return;
@@ -97,9 +99,9 @@ module.exports = class Room {
     this.callingTeam = null;
     this.players.forEach(player => player.hasAnnouncedCombination = false);
     // Rotate dealer anti-clockwise:
-    this.dealingPlayerIndex = (this.dealingPlayerIndex - 1 + 4) % 4;
+    this.dealingPlayerIndex = (this.dealingPlayerIndex + 1) % 4;
     // For announcing, the turn starts with the player immediately anti-clockwise to the dealer.
-    this.turnIndex = (this.dealingPlayerIndex - 1 + 4) % 4;
+    this.turnIndex = (this.dealingPlayerIndex + 1) % 4;
     this.deck = this.createDeck();
     io.to(this.id).emit("splitting", { room: this });
   }
@@ -157,7 +159,7 @@ module.exports = class Room {
     this.gameStage = 'announcing';
     this.announcements.push(announcement);
     // Advance turn anti-clockwise.
-    this.turnIndex = (this.turnIndex - 1 + 4) % 4;
+    this.turnIndex = (this.turnIndex + 1) % 4;
     
     // Termination Conditions:
     // (1) All four players pass → round reset.
@@ -197,8 +199,141 @@ module.exports = class Room {
     });
     this.gameStage = 'playing';
     // The announcing turn starts with the player immediately anti-clockwise to the dealer.
-    this.turnIndex = (this.dealingPlayerIndex - 1 + 4) % 4;
+    this.turnIndex = (this.dealingPlayerIndex + 1) % 4;
     io.to(this.id).emit("restCardsDealt", { room: this });
+    console.log(this.detectCombinations());
+  }
+
+  detectBelot() {
+      // === BELLOT ===
+      // Belot is only allowed when combinations are allowed.
+      if (this.gameType !== "no trumps") {
+        if (this.gameType === "suit") {
+          // Only check the announced trump suit.
+          if (
+            player.hand.some(c => c.suit === this.trumpSuit && c.rank === "K") &&
+            player.hand.some(c => c.suit === this.trumpSuit && c.rank === "Q")
+          ) {
+            combos.push({ type: "belot", suit: this.trumpSuit, bonus: 20 });
+          }
+        } else if (this.gameType === "all trumps") {
+          // Check for belot in each suit.
+          ["hearts", "diamonds", "clubs", "spades"].forEach(suit => {
+            if (
+              player.hand.some(c => c.suit === suit && c.rank === "K") &&
+              player.hand.some(c => c.suit === suit && c.rank === "Q")
+            ) {
+              combos.push({ type: "belot", suit: suit, bonus: 20 });
+            }
+          });
+        }
+      }
+  }
+
+  detectCombinations() {
+    let results = {};
+    // Define the rank order for sequences.
+    const rankOrder = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+    // Process each player.
+    this.players.forEach(player => {
+      let combos = [];
+      if (!player.hand) {
+        results[player.id] = combos;
+        return;
+      }
+      
+      // === SEQUENCES ===
+      // For each suit, find the longest consecutive sequence.
+      ["hearts", "diamonds", "clubs", "spades"].forEach(suit => {
+        // Collect all ranks the player holds in this suit.
+        const cardsInSuit = player.hand.filter(c => c.suit === suit).map(c => c.rank);
+        // Remove duplicates and sort by rank order.
+        let uniqueRanks = Array.from(new Set(cardsInSuit));
+        uniqueRanks.sort((a, b) => rankOrder.indexOf(a) - rankOrder.indexOf(b));
+        if (uniqueRanks.length > 0) {
+          let currentSeq = [uniqueRanks[0]];
+          for (let i = 1; i < uniqueRanks.length; i++) {
+            if (rankOrder.indexOf(uniqueRanks[i]) === rankOrder.indexOf(uniqueRanks[i - 1]) + 1) {
+              currentSeq.push(uniqueRanks[i]);
+            } else {
+              if (currentSeq.length >= 3) {
+                // Classify based on length.
+                if (currentSeq.length >= 5) {
+                  combos.push({
+                    type: "quint",
+                    suit: suit,
+                    bonus: 100,
+                    highestCardRank: currentSeq[currentSeq.length - 1]
+                  });
+                } else if (currentSeq.length === 4) {
+                  combos.push({
+                    type: "quarte",
+                    suit: suit,
+                    bonus: 50,
+                    highestCardRank: currentSeq[currentSeq.length - 1]
+                  });
+                } else if (currentSeq.length === 3) {
+                  combos.push({
+                    type: "tierce",
+                    suit: suit,
+                    bonus: 20,
+                    highestCardRank: currentSeq[currentSeq.length - 1]
+                  });
+                }
+              }
+              currentSeq = [uniqueRanks[i]];
+            }
+          }
+          // Check if the final sequence qualifies.
+          if (currentSeq.length >= 3) {
+            if (currentSeq.length >= 5) {
+              combos.push({
+                type: "quint",
+                suit: suit,
+                bonus: 100,
+                highestCardRank: currentSeq[currentSeq.length - 1]
+              });
+            } else if (currentSeq.length === 4) {
+              combos.push({
+                type: "quarte",
+                suit: suit,
+                bonus: 50,
+                highestCardRank: currentSeq[currentSeq.length - 1]
+              });
+            } else if (currentSeq.length === 3) {
+              combos.push({
+                type: "tierce",
+                suit: suit,
+                bonus: 20,
+                highestCardRank: currentSeq[currentSeq.length - 1]
+              });
+            }
+          }
+        }
+      });
+      
+      // === SQUARES ===
+      // Count occurrences of each rank.
+      let rankCounts = {};
+      player.hand.forEach(c => {
+        rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1;
+      });
+      // For square_standard: check for each rank among "10", "Q", "K", "A".
+      ["10", "Q", "K", "A"].forEach(rank => {
+        if (rankCounts[rank] === 4) {
+          combos.push({ type: "square_standard", bonus: 100, rank: rank });
+        }
+      });
+      if (rankCounts["9"] === 4) {
+        combos.push({ type: "square_nines", bonus: 150, rank: "9" });
+      }
+      if (rankCounts["J"] === 4) {
+        combos.push({ type: "square_jacks", bonus: 200, rank: "J" });
+      }
+      
+      results[player.id] = combos;
+    });
+    return results;
   }
 
   // Process a combination bonus announcement.
@@ -321,6 +456,92 @@ module.exports = class Room {
     return bonus;
   }
 
+
+   // NEW: Detect combinations for a single player.
+   detectCombinationForPlayer(player) {
+    let combos = [];
+    if (!player.hand) return combos;
+    // SEQUENCE detection.
+    const rankOrder = ["7", "8", "9", "10", "J", "Q", "K", "A"];
+    ["hearts", "diamonds", "clubs", "spades"].forEach(suit => {
+      const cardsInSuit = player.hand.filter(c => c.suit === suit).map(c => c.rank);
+      let uniqueRanks = Array.from(new Set(cardsInSuit));
+      uniqueRanks.sort((a, b) => rankOrder.indexOf(a) - rankOrder.indexOf(b));
+      if (uniqueRanks.length > 0) {
+        let currentSeq = [uniqueRanks[0]];
+        for (let i = 1; i < uniqueRanks.length; i++) {
+          if (rankOrder.indexOf(uniqueRanks[i]) === rankOrder.indexOf(uniqueRanks[i - 1]) + 1) {
+            currentSeq.push(uniqueRanks[i]);
+          } else {
+            if (currentSeq.length >= 3) {
+              if (currentSeq.length >= 5) {
+                combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1] });
+              } else if (currentSeq.length === 4) {
+                combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1] });
+              } else if (currentSeq.length === 3) {
+                combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1] });
+              }
+            }
+            currentSeq = [uniqueRanks[i]];
+          }
+        }
+        if (currentSeq.length >= 3) {
+          if (currentSeq.length >= 5) {
+            combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1] });
+          } else if (currentSeq.length === 4) {
+            combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1] });
+          } else if (currentSeq.length === 3) {
+            combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1] });
+          }
+        }
+      }
+    });
+    // SQUARE detection.
+    let rankCounts = {};
+    player.hand.forEach(c => {
+      rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1;
+    });
+    ["10", "Q", "K", "A"].forEach(rank => {
+      if (rankCounts[rank] === 4) {
+        combos.push({ type: "square_standard", bonus: 100, rank: rank });
+      }
+    });
+    if (rankCounts["9"] === 4) {
+      combos.push({ type: "square_nines", bonus: 150, rank: "9" });
+    }
+    if (rankCounts["J"] === 4) {
+      combos.push({ type: "square_jacks", bonus: 200, rank: "J" });
+    }
+    return combos;
+  }
+
+  // NEW: Compute the final combination for each team once all players have detected their combinations.
+  computeFinalCombinations(io) {
+    let finalCombos = { NS: null, EW: null };
+    const rankOrder = { "A": 8, "K": 7, "Q": 6, "J": 5, "10": 4, "9": 3, "8": 2, "7": 1 };
+    ["NS", "EW"].forEach(team => {
+      let teamCombos = [];
+      this.players.forEach(p => {
+        if (p.team === team && p.detectedCombination !== undefined) {
+          teamCombos = teamCombos.concat(p.detectedCombination);
+        }
+      });
+      if (teamCombos.length === 0) return;
+      // Sort combinations by bonus descending. For sequence types, use highest card as tie-breaker.
+      teamCombos.sort((a, b) => {
+        if (b.bonus !== a.bonus) return b.bonus - a.bonus;
+        if (["tierce", "quarte", "quint"].includes(a.type)) {
+          return (rankOrder[b.highestCardRank] || 0) - (rankOrder[a.highestCardRank] || 0);
+        }
+        return 0;
+      });
+      finalCombos[team] = teamCombos[0];
+    });
+    this.finalCombination = finalCombos;
+    io.to(this.id).emit("finalCombination", { finalCombination: this.finalCombination });
+  }
+
+
   // Get the point value of a card based on the game type.
   getCardValue(card) {
     const trumpValues = { 'A': 11, '10': 10, 'K': 4, 'Q': 3, 'J': 20, '9': 14, '8': 0, '7': 0 };
@@ -377,12 +598,149 @@ module.exports = class Room {
 
   // Check if a move is valid.
   isValidMove(player, card) {
-    return player.hand.some(c => c.suit === card.suit && c.rank === card.rank);
+    // First, ensure the card exists in the player's hand.
+    if (!player.hand.some(c => c.suit === card.suit && c.rank === card.rank)) {
+      return false;
+    }
+  
+    // 2. If no trick is in progress, any card is allowed.
+    if (this.playedCards.length === 0) {
+      return true;
+    }
+
+    const ledSuit = this.playedCards[0].card.suit;
+    const trump = this.trumpSuit; // announced trump suit
+    const gameType = this.gameType; // here, expected to be "suit"
+    
+    // Helper: get team by player id.
+    const getTeam = (playerId) => {
+      const p = this.players.find(p => p.id === playerId);
+      return p ? p.team : null;
+    };
+  
+    // If the game is "all trumps" and a trick is in progress, enforce following suit and overtrumping rules.
+    if (this.gameType === 'all trumps' && this.playedCards && this.playedCards.length > 0) {
+      const ledSuit = this.playedCards[0].card.suit;
+      // Check if the player has any card in the led suit.
+      const playerHasLedSuit = player.hand.some(c => c.suit === ledSuit);
+      if (playerHasLedSuit && card.suit !== ledSuit) {
+        // Must follow suit.
+        return false;
+      }
+      // If the card is of the led suit, then enforce overtrumping if possible.
+      if (card.suit === ledSuit) {
+        // Define trump order for All Trumps (lower index is higher).
+        const trumpOrder = ["J", "9", "A", "10", "K", "Q", "8", "7"];
+        // Find the best (i.e. highest) card in the trick from the led suit.
+        const playedInLedSuit = this.playedCards.filter(play => play.card.suit === ledSuit);
+        let bestIndex = Infinity;
+        playedInLedSuit.forEach(play => {
+          const idx = trumpOrder.indexOf(play.card.rank);
+          if (idx < bestIndex) {
+            bestIndex = idx;
+          }
+        });
+        // Determine if the player has any card in led suit that can beat the current highest.
+        const playerCardsInLed = player.hand.filter(c => c.suit === ledSuit);
+        const canOvertrump = playerCardsInLed.some(c => trumpOrder.indexOf(c.rank) < bestIndex);
+        if (canOvertrump) {
+          // If the player can overtrump, then the played card must be one of those.
+          if (trumpOrder.indexOf(card.rank) >= bestIndex) {
+            return false;
+          }
+        }
+        // Otherwise, if the player cannot overtrump, then playing any card of led suit is acceptable.
+      }
+    } if(this.gameType == 'suit') {
+      if (ledSuit === trump) {
+        // (a) If the player has any trump, they must play a trump.
+        const hasTrump = player.hand.some(c => c.suit === trump);
+        if (hasTrump && card.suit !== trump) return false;
+  
+        // (b) If at least one trump has been played in this trick,
+        // check if the current winning trump (lowest index in trumpOrder)
+        // is held by an opponent.
+        const playedTrumps = this.playedCards.filter(play => play.card.suit === trump);
+        if (playedTrumps.length > 0) {
+          const trumpOrder = ["J", "9", "A", "10", "K", "Q", "8", "7"];
+          const currentWinning = playedTrumps.reduce((best, cur) =>
+            trumpOrder.indexOf(cur.card.rank) < trumpOrder.indexOf(best.card.rank)
+              ? cur : best
+          );
+          if (getTeam(currentWinning.playerId) !== player.team) {
+            // If the opponent is winning and the player can overtrump, they must.
+            const playerTrumps = player.hand.filter(c => c.suit === trump);
+            const overtrumpOptions = playerTrumps.filter(c =>
+              trumpOrder.indexOf(c.rank) < trumpOrder.indexOf(currentWinning.card.rank)
+            );
+            if (overtrumpOptions.length > 0) {
+              // Then the played card must be one of the options.
+              if (!overtrumpOptions.some(c => c.suit === card.suit && c.rank === card.rank)) {
+                return false;
+              }
+            }
+          }
+        }
+        return true;
+      } 
+      // --- CASE B: Led suit is NOT trump ---
+      else {
+        // (a) If the player has cards in the led suit, they must follow suit.
+        const hasLed = player.hand.some(c => c.suit === ledSuit);
+        if (hasLed) {
+          if (card.suit !== ledSuit) return false;
+          // No overtrumping rule applies if following led suit.
+          return true;
+        } else {
+          // (b) If the player has no cards in the led suit, normally they must play trump.
+          const hasTrump = player.hand.some(c => c.suit === trump);
+          if (hasTrump) {
+            // Check if any trump is already played.
+            const playedTrumps = this.playedCards.filter(play => play.card.suit === trump);
+            if (playedTrumps.length > 0) {
+              const trumpOrder = ["J", "9", "A", "10", "K", "Q", "8", "7"];
+              const currentWinning = playedTrumps.reduce((best, cur) =>
+                trumpOrder.indexOf(cur.card.rank) < trumpOrder.indexOf(best.card.rank)
+                  ? cur : best
+              );
+              // If the current winning trump belongs to an opponent, and if the player can overtrump, they must.
+              if (getTeam(currentWinning.playerId) !== player.team) {
+                const playerTrumps = player.hand.filter(c => c.suit === trump);
+                const overtrumpOptions = playerTrumps.filter(c =>
+                  trumpOrder.indexOf(c.rank) < trumpOrder.indexOf(currentWinning.card.rank)
+                );
+                if (overtrumpOptions.length > 0) {
+                  if (!overtrumpOptions.some(c => c.suit === card.suit && c.rank === card.rank)) {
+                    return false;
+                  }
+                } else {
+                  // If the player cannot overtrump, they still must play a trump.
+                  if (card.suit !== trump) return false;
+                }
+              } else {
+                // If the current winning trump is held by a teammate, no obligation to overtrump.
+                return true;
+              }
+            } else {
+              // No trump has been played yet: the rule forces playing trump.
+              if (card.suit !== trump) return false;
+              return true;
+            }
+          } else {
+            // If the player has neither led suit nor trump, they can play any card.
+            return true;
+          }
+        }
+      }
+    } else {
+      return player.hand.some(c => c.suit === card.suit && c.rank === card.rank);
+    }
+    return true;
   }
+  
 
   // Process a card play.
   playCard(playerId, card, io) {
-    console.log("Current turn index:", this.turnIndex);
     const currentPlayer = this.players[this.turnIndex];
     if (currentPlayer.id !== playerId) {
       io.to(this.id).emit("error", { message: "Not your turn" });
@@ -397,6 +755,17 @@ module.exports = class Room {
       return;
     }
     
+    // NEW: If this is the first card the player is playing in the round,
+    // detect and emit his combination.
+    if (player.hand.length === 8 && player.detectedCombination === undefined) {
+      player.detectedCombination = this.detectCombinationForPlayer(player);
+      io.to(this.id).emit("combinationDetected", { playerId: player.id, combination: player.detectedCombination });
+      // If all players have been processed, compute the final combination.
+      if (this.players.every(p => p.detectedCombination !== undefined)) {
+        this.computeFinalCombinations(io);
+      }
+    }
+
     // Remove the card from the player's hand.
     player.hand = player.hand.filter(c => !(c.suit === card.suit && c.rank === card.rank));
     this.playedCards.push({ playerId, card });
@@ -404,53 +773,69 @@ module.exports = class Room {
     if (this.playedCards.length === 4) {
       const trickWinnerIndex = this.determineTrickWinner();
       const winningPlayer = this.players[trickWinnerIndex];
-      console.log("Players:", this.players, "Trick winner index:", trickWinnerIndex);
-      io.to(this.id).emit("trickCompleted", { room: this, winner: winningPlayer });
+      // console.log("Players:", this.players, "Trick winner index:", trickWinnerIndex);
       this.capturedCards[winningPlayer.team].push(...this.playedCards.map(play => play.card));
-      this.playedCards = [];
       this.turnIndex = trickWinnerIndex;
+      this.playedCards = [];
       this.tricksPlayed++;
+      io.to(this.id).emit("trickCompleted", { room: this, playedCards: [] });
       if (this.tricksPlayed === 8) {
         this.lastHandTeam = winningPlayer.team;
         this.endRound(io);
       }
     } else {
-      this.turnIndex = (this.turnIndex - 1 + 4) % 4;
+      this.turnIndex = (this.turnIndex + 1) % 4;
       io.to(this.id).emit("cardPlayed", { room: this, playedCards: this.playedCards });
     }
   }
 
-  // Determine the winner of the current trick.
   determineTrickWinner() {
     if (this.playedCards.length !== 4) return null;
     const ledSuit = this.playedCards[0].card.suit;
-    const trumpOrder = ["J", "9", "A", "10", "K", "Q", "8", "7"];
-    const nonTrumpOrder = ["A", "10", "K", "Q", "J", "9", "8", "7"];
-    let trumpPlays = [];
-    let ledPlays = [];
-    
-    this.playedCards.forEach((play, index) => {
-      // For "all trumps", every card is considered a trump.
-      if ((this.gameType === "suit" && play.card.suit === this.trumpSuit) || this.gameType === 'all trumps') {
-        trumpPlays.push({ index, rank: play.card.rank });
-      } else if (play.card.suit === ledSuit) {
-        console.log('led suit play')
-        ledPlays.push({ index, rank: play.card.rank });
+    const trump = this.trumpSuit;
+    const gameType = this.gameType;
+  
+    // For "suit" games:
+    if (gameType === "suit") {
+      // Check if any trump cards have been played.
+      const playedTrumps = this.playedCards.filter(play => play.card.suit === trump);
+      if (playedTrumps.length > 0) {
+        const trumpOrder = ["J", "9", "A", "10", "K", "Q", "8", "7"];
+        const winningPlay = playedTrumps.reduce((best, cur) =>
+          trumpOrder.indexOf(cur.card.rank) < trumpOrder.indexOf(best.card.rank)
+            ? cur : best
+        );
+        return this.players.findIndex(p => p.id === winningPlay.playerId);
+      } else {
+        // Otherwise, use the led suit.
+        const nonTrumpOrder = ["A", "10", "K", "Q", "J", "9", "8", "7"];
+        const ledPlays = this.playedCards.filter(play => play.card.suit === ledSuit);
+        const winningPlay = ledPlays.reduce((best, cur) =>
+          nonTrumpOrder.indexOf(cur.card.rank) < nonTrumpOrder.indexOf(best.card.rank)
+            ? cur : best
+        );
+        return this.players.findIndex(p => p.id === winningPlay.playerId);
       }
-    });
-    
-    let winningIndex;
-    if (trumpPlays.length > 0) {
-      winningIndex = trumpPlays.reduce((best, current) =>
-        trumpOrder.indexOf(current.rank) < trumpOrder.indexOf(best.rank) ? current : best
-      ).index;
-    } else {
-      winningIndex = ledPlays.reduce((best, current) =>
-        nonTrumpOrder.indexOf(current.rank) < nonTrumpOrder.indexOf(best.rank) ? current : best
-      ).index;
     }
-    
-    const winningPlayerId = this.playedCards[winningIndex].playerId;
-    return this.players.findIndex(p => p.id === winningPlayerId);
+    // For "all trumps", use the trump order on all cards.
+    else if (gameType === "all trumps") {
+      const trumpOrder = ["J", "9", "A", "10", "K", "Q", "8", "7"];
+      const winningPlay = this.playedCards.reduce((best, cur) =>
+        trumpOrder.indexOf(cur.card.rank) < trumpOrder.indexOf(best.card.rank)
+          ? cur : best
+      );
+      return this.players.findIndex(p => p.id === winningPlay.playerId);
+    }
+    // For "no trumps", follow led suit only.
+    else {
+      const nonTrumpOrder = ["A", "10", "K", "Q", "J", "9", "8", "7"];
+      const ledPlays = this.playedCards.filter(play => play.card.suit === ledSuit);
+      const winningPlay = ledPlays.reduce((best, cur) =>
+        nonTrumpOrder.indexOf(cur.card.rank) < nonTrumpOrder.indexOf(best.card.rank)
+          ? cur : best
+      );
+      return this.players.findIndex(p => p.id === winningPlay.playerId);
+    }
   }
+  
 };
