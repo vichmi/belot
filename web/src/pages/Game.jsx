@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { socket } from '../lib/socket';
 import Announcements from './Announcements';
+import CombinationsAnnounce from './CombinationsAnnounce';
 
 // Create an array of placeholders for unknown card images.
 const unknownCards = Array.from({ length: 32 }, (_, i) => i);
@@ -17,6 +18,8 @@ export default function Game({ init_room, player }) {
   const [iSplit, setISplit] = useState(false);
   const [showAnnouncements, setShowAnnouncements] = useState(false);
   const [firstPlacedCard, setFirstPlacedCard] = useState();
+  const [combinations, setCombinations] = useState([]);
+  const [showCombinationBox, setShowCombinationBox] = useState(false);
 
   // Helper: Sort cards by suit then by rank.
   const sortCards = (cardA, cardB) => {
@@ -136,7 +139,9 @@ export default function Game({ init_room, player }) {
     });
 
     socket.on('combinationDetected', data => {
-      console.log(data.playerId, data.combination);
+      if(data.playerId != player.id) {return;}
+      setCombinations(data.combination);
+      setShowCombinationBox(true);
     })
 
     return () => {
@@ -246,6 +251,7 @@ export default function Game({ init_room, player }) {
           <Announcements room={room} player={player} />
         )}
 
+
         {/* Display cards played on the table */}
         {room.playedCards && room.playedCards.length > 0 && (
           <div className="table-container">
@@ -264,6 +270,9 @@ export default function Game({ init_room, player }) {
             })}
           </div>
         )}
+
+        
+        {combinations.length > 0 && showCombinationBox ? <CombinationsAnnounce combinations={combinations} setShowCombinationBox={setShowCombinationBox} /> : <></>}
       </div>
     </div>
   );

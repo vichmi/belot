@@ -56,6 +56,10 @@ module.exports = {
       }
     });
 
+    socket.on('saveCombinations', ({combinations}) => {
+      playerRoom.finalCombinationAnnouncements[player.team].concat(combinations);
+    });
+
     // Disconnect.
     socket.on('disconnect', () => {
       if (playerRoom && player) {

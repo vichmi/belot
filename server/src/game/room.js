@@ -16,6 +16,7 @@ module.exports = class Room {
     this.dealingPlayerIndex = 0; // the current dealer (the one who receives the split deck)
     // Combination bonus announcements and scoring:
     this.combinationAnnouncements = { NS: [], EW: [] };
+    this.finalCombinationAnnouncements = this.combinationAnnouncements;
     this.tricksPlayed = 0;
     this.capturedCards = { NS: [], EW: [] };
     this.callingTeam = null;
@@ -263,21 +264,21 @@ module.exports = class Room {
                     type: "quint",
                     suit: suit,
                     bonus: 100,
-                    highestCardRank: currentSeq[currentSeq.length - 1]
+                    highestCardRank: currentSeq[currentSeq.length - 1],
                   });
                 } else if (currentSeq.length === 4) {
                   combos.push({
                     type: "quarte",
                     suit: suit,
                     bonus: 50,
-                    highestCardRank: currentSeq[currentSeq.length - 1]
+                    highestCardRank: currentSeq[currentSeq.length - 1],
                   });
                 } else if (currentSeq.length === 3) {
                   combos.push({
                     type: "tierce",
                     suit: suit,
                     bonus: 20,
-                    highestCardRank: currentSeq[currentSeq.length - 1]
+                    highestCardRank: currentSeq[currentSeq.length - 1],
                   });
                 }
               }
@@ -291,21 +292,21 @@ module.exports = class Room {
                 type: "quint",
                 suit: suit,
                 bonus: 100,
-                highestCardRank: currentSeq[currentSeq.length - 1]
+                highestCardRank: currentSeq[currentSeq.length - 1],
               });
             } else if (currentSeq.length === 4) {
               combos.push({
                 type: "quarte",
                 suit: suit,
                 bonus: 50,
-                highestCardRank: currentSeq[currentSeq.length - 1]
+                highestCardRank: currentSeq[currentSeq.length - 1],
               });
             } else if (currentSeq.length === 3) {
               combos.push({
                 type: "tierce",
                 suit: suit,
                 bonus: 20,
-                highestCardRank: currentSeq[currentSeq.length - 1]
+                highestCardRank: currentSeq[currentSeq.length - 1],
               });
             }
           }
@@ -475,11 +476,11 @@ module.exports = class Room {
           } else {
             if (currentSeq.length >= 3) {
               if (currentSeq.length >= 5) {
-                combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1] });
+                combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
               } else if (currentSeq.length === 4) {
-                combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1] });
+                combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
               } else if (currentSeq.length === 3) {
-                combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1] });
+                combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
               }
             }
             currentSeq = [uniqueRanks[i]];
@@ -487,11 +488,11 @@ module.exports = class Room {
         }
         if (currentSeq.length >= 3) {
           if (currentSeq.length >= 5) {
-            combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1] });
+            combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
           } else if (currentSeq.length === 4) {
-            combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1] });
+            combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
           } else if (currentSeq.length === 3) {
-            combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1] });
+            combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
           }
         }
       }
@@ -503,14 +504,14 @@ module.exports = class Room {
     });
     ["10", "Q", "K", "A"].forEach(rank => {
       if (rankCounts[rank] === 4) {
-        combos.push({ type: "square_standard", bonus: 100, rank: rank });
+        combos.push({ type: "square_standard", bonus: 100, rank: rank, isChecked: true });
       }
     });
     if (rankCounts["9"] === 4) {
-      combos.push({ type: "square_nines", bonus: 150, rank: "9" });
+      combos.push({ type: "square_nines", bonus: 150, rank: "9", isChecked: true });
     }
     if (rankCounts["J"] === 4) {
-      combos.push({ type: "square_jacks", bonus: 200, rank: "J" });
+      combos.push({ type: "square_jacks", bonus: 200, rank: "J", isChecked: true });
     }
     return combos;
   }
@@ -522,9 +523,9 @@ module.exports = class Room {
     ["NS", "EW"].forEach(team => {
       let teamCombos = [];
       this.players.forEach(p => {
-        if (p.team === team && p.detectedCombination !== undefined) {
-          teamCombos = teamCombos.concat(p.detectedCombination);
-        }
+          if (p.team === team && p.detectedCombination !== undefined) {
+            teamCombos = teamCombos.concat(p.detectedCombination);
+          }
       });
       if (teamCombos.length === 0) return;
       // Sort combinations by bonus descending. For sequence types, use highest card as tie-breaker.
@@ -565,6 +566,7 @@ module.exports = class Room {
         trickPoints[team] += this.getCardValue(card);
       });
     });
+    console.log(comboBonus);
     let totalPoints = {
       NS: trickPoints.NS + comboBonus.NS,
       EW: trickPoints.EW + comboBonus.EW
@@ -576,8 +578,8 @@ module.exports = class Room {
     totalPoints[this.lastHandTeam] += 10;
     if (this.callingTeam) {
       const opponent = this.callingTeam === 'NS' ? 'EW' : 'NS';
-      if (totalPoints[this.callingTeam] < threshold) {
-        totalPoints[opponent] = threshold * 2;
+      if (totalPoints[this.callingTeam] < threshold + comboBonus[this.callingTeam] + comboBonus[opponent]) {
+        totalPoints[opponent] += totalPoints[this.callingTeam];
         totalPoints[this.callingTeam] = 0;
       }
     }
@@ -761,9 +763,6 @@ module.exports = class Room {
       player.detectedCombination = this.detectCombinationForPlayer(player);
       io.to(this.id).emit("combinationDetected", { playerId: player.id, combination: player.detectedCombination });
       // If all players have been processed, compute the final combination.
-      if (this.players.every(p => p.detectedCombination !== undefined)) {
-        this.computeFinalCombinations(io);
-      }
     }
 
     // Remove the card from the player's hand.
@@ -781,6 +780,9 @@ module.exports = class Room {
       io.to(this.id).emit("trickCompleted", { room: this, playedCards: [] });
       if (this.tricksPlayed === 8) {
         this.lastHandTeam = winningPlayer.team;
+        if (this.players.every(p => p.detectedCombination !== undefined)) {
+          this.computeFinalCombinations(io);
+        }
         this.endRound(io);
       }
     } else {
