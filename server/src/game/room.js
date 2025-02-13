@@ -1,10 +1,26 @@
-// server/game/room.js
+
+const {makeAnnouncement} = require('./announcements');
+const {
+  announceCombination,
+  detectBelot,
+  detectCombinations,
+  detectCombinationForPlayer,
+  calculateCombinationBonuses,
+  computeFinalCombinations
+} = require('./combinations');
+const {
+  createDeck,
+  splitDeck,
+  dealInitialCards,
+  dealRestCards,
+  setDeckAfterPlayOut
+} = require('./deck.js');
+
 module.exports = class Room {
   constructor(id, name) {
     this.id = id;
     this.name = name;
     this.players = [];
-    this.deck = this.createDeck();
     this.scores = { NS: 0, EW: 0 };
     this.rounds = [];
     this.trumpSuit = null;
@@ -26,29 +42,6 @@ module.exports = class Room {
     this.finalCombination = { NS: null, EW: null };
   }
 
-  // Create a 32–card deck and shuffle it using Fisher–Yates.
-  createDeck() {
-    const suits = ["hearts", "diamonds", "clubs", "spades"];
-    const ranks = ["7", "8", "9", "10", "J", "Q", "K", "A"];
-    let deck = [];
-    suits.forEach(suit => {
-      ranks.forEach(rank => deck.push({ suit, rank }));
-    });
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-    return deck;
-  }
-
-  // Rotate the deck from a given index then deal the initial cards.
-  splitDeck(index, io) {
-    if (index < 0 || index >= this.deck.length) return;
-    this.deck = [...this.deck.slice(index), ...this.deck.slice(0, index)];
-    this.dealInitialCards(io);
-    this.gameStage = 'splitting';
-  }
-
   // Add a player to the room.
   addPlayer(player, socket, io) {
     if (this.players.length < 4) {
@@ -61,7 +54,7 @@ module.exports = class Room {
       socket.emit('userJoined', { room: this, player });
       io.to(this.id).emit('playerJoined', { room: this });
       if (this.players.length === 4) {
-        this.startGame(io);
+        this.nextRound(io);
       }
     }
   }
@@ -72,12 +65,6 @@ module.exports = class Room {
     socket.leave(this.id);
     io.to(this.id).emit('playerDisconnected', { room: this });
   }
-
-  // Start the game (reset variables and start a new round).
-  startGame(io) {
-    this.nextRound(io);
-  }
-
   // Start the next round.
   nextRound(io) {
     // If all four bidding announcements are "pass", reset the round.
@@ -103,458 +90,8 @@ module.exports = class Room {
     this.dealingPlayerIndex = (this.dealingPlayerIndex + 1) % 4;
     // For announcing, the turn starts with the player immediately anti-clockwise to the dealer.
     this.turnIndex = (this.dealingPlayerIndex + 1) % 4;
-    this.deck = this.createDeck();
+    this.deck = this.setDeckAfterPlayOut(this);
     io.to(this.id).emit("splitting", { room: this });
-  }
-
-  // Deal the initial five cards to every player (first three then two).
-  dealInitialCards(io) {
-    this.players.forEach(player => player.hand = []);
-    let deckCopy = [...this.deck];
-    for (let i = 0; i < 3; i++) {
-      this.players.forEach(player => {
-        player.hand.push(deckCopy.pop());
-      });
-    }
-    for (let i = 0; i < 2; i++) {
-      this.players.forEach(player => {
-        player.hand.push(deckCopy.pop());
-      });
-    }
-    this.deck = deckCopy;
-    io.to(this.id).emit("initialCardsDealt", { room: this });
-    this.gameStage = 'dealing';
-  }
-
-  // Process a bidding announcement.
-  makeAnnouncement(playerId, announcement, io) {
-    const validOrder = ["clubs", "diamonds", "hearts", "spades", "no trumps", "all trumps"];
-    const player = this.players.find(p => p.id === playerId);
-    if (!player) return;
-    
-    // For non‑pass bids, ensure the new bid is higher than the last non‑pass bid.
-    if (announcement !== "pass") {
-      const lastNonPass = this.announcements.filter(a => a !== "pass").slice(-1)[0];
-      if (lastNonPass && validOrder.indexOf(announcement) <= validOrder.indexOf(lastNonPass)) {
-        io.to(player.id).emit('error', { message: 'Cannot call this suit' });
-        return;
-      }
-      if (["clubs", "diamonds", "hearts", "spades"].includes(announcement)) {
-        this.trumpSuit = announcement;
-        this.gameType = "suit";
-      } else if (announcement === "no trumps") {
-        this.trumpSuit = null;
-        this.gameType = "no trumps";
-      } else if (announcement === "all trumps") {
-        this.trumpSuit = null;
-        this.gameType = "all trumps";
-      }
-      this.callingTeam = player.team;
-    } else {
-      // If a pass is given and all four are passes, restart the round.
-      if (this.announcements.length === 3 && this.announcements.every(a => a === "pass")) {
-        this.nextRound(io);
-        return;
-      }
-    }
-    this.gameStage = 'announcing';
-    this.announcements.push(announcement);
-    // Advance turn anti-clockwise.
-    this.turnIndex = (this.turnIndex + 1) % 4;
-    
-    // Termination Conditions:
-    // (1) All four players pass → round reset.
-    if (this.announcements.length === 4 && this.announcements.every(a => a === "pass")) {
-      this.deck = this.createDeck();
-      io.to(this.id).emit("roundRestarted", { room: this });
-      return;
-    }
-    // (2) "All trumps" bid ends bidding immediately.
-    if (this.gameType === "all trumps") {
-      this.dealRestCards(io);
-      return;
-    }
-    // (3) For a suit or "no trumps" bid, if three consecutive passes follow the last non‑pass bid, end bidding.
-    const lastNonPassIndex = this.announcements
-      .map((a, i) => a !== "pass" ? i : -1)
-      .filter(i => i !== -1)
-      .pop();
-    let consecutivePasses = 0;
-    for (let i = this.announcements.length - 1; i > lastNonPassIndex; i--) {
-      if (this.announcements[i] === "pass") consecutivePasses++;
-      else break;
-    }
-    if (lastNonPassIndex !== undefined && consecutivePasses >= 3) {
-      this.dealRestCards(io);
-      return;
-    }
-    io.to(this.id).emit("announcementMade", { room: this, lastAnnouncement: announcement });
-  }
-
-  // Deal the remaining three cards so that each player ends up with eight cards.
-  dealRestCards(io) {
-    this.players.forEach(player => {
-      for (let i = 0; i < 3; i++) {
-        player.hand.push(this.deck.pop());
-      }
-    });
-    this.gameStage = 'playing';
-    // The announcing turn starts with the player immediately anti-clockwise to the dealer.
-    this.turnIndex = (this.dealingPlayerIndex + 1) % 4;
-    io.to(this.id).emit("restCardsDealt", { room: this });
-    console.log(this.detectCombinations());
-  }
-
-  detectBelot() {
-      // === BELLOT ===
-      // Belot is only allowed when combinations are allowed.
-      if (this.gameType !== "no trumps") {
-        if (this.gameType === "suit") {
-          // Only check the announced trump suit.
-          if (
-            player.hand.some(c => c.suit === this.trumpSuit && c.rank === "K") &&
-            player.hand.some(c => c.suit === this.trumpSuit && c.rank === "Q")
-          ) {
-            combos.push({ type: "belot", suit: this.trumpSuit, bonus: 20 });
-          }
-        } else if (this.gameType === "all trumps") {
-          // Check for belot in each suit.
-          ["hearts", "diamonds", "clubs", "spades"].forEach(suit => {
-            if (
-              player.hand.some(c => c.suit === suit && c.rank === "K") &&
-              player.hand.some(c => c.suit === suit && c.rank === "Q")
-            ) {
-              combos.push({ type: "belot", suit: suit, bonus: 20 });
-            }
-          });
-        }
-      }
-  }
-
-  detectCombinations() {
-    let results = {};
-    // Define the rank order for sequences.
-    const rankOrder = ["7", "8", "9", "10", "J", "Q", "K", "A"];
-    // Process each player.
-    this.players.forEach(player => {
-      let combos = [];
-      if (!player.hand) {
-        results[player.id] = combos;
-        return;
-      }
-      
-      // === SEQUENCES ===
-      // For each suit, find the longest consecutive sequence.
-      ["hearts", "diamonds", "clubs", "spades"].forEach(suit => {
-        // Collect all ranks the player holds in this suit.
-        const cardsInSuit = player.hand.filter(c => c.suit === suit).map(c => c.rank);
-        // Remove duplicates and sort by rank order.
-        let uniqueRanks = Array.from(new Set(cardsInSuit));
-        uniqueRanks.sort((a, b) => rankOrder.indexOf(a) - rankOrder.indexOf(b));
-        if (uniqueRanks.length > 0) {
-          let currentSeq = [uniqueRanks[0]];
-          for (let i = 1; i < uniqueRanks.length; i++) {
-            if (rankOrder.indexOf(uniqueRanks[i]) === rankOrder.indexOf(uniqueRanks[i - 1]) + 1) {
-              currentSeq.push(uniqueRanks[i]);
-            } else {
-              if (currentSeq.length >= 3) {
-                // Classify based on length.
-                if (currentSeq.length >= 5) {
-                  combos.push({
-                    type: "quint",
-                    suit: suit,
-                    bonus: 100,
-                    highestCardRank: currentSeq[currentSeq.length - 1],
-                  });
-                } else if (currentSeq.length === 4) {
-                  combos.push({
-                    type: "quarte",
-                    suit: suit,
-                    bonus: 50,
-                    highestCardRank: currentSeq[currentSeq.length - 1],
-                  });
-                } else if (currentSeq.length === 3) {
-                  combos.push({
-                    type: "tierce",
-                    suit: suit,
-                    bonus: 20,
-                    highestCardRank: currentSeq[currentSeq.length - 1],
-                  });
-                }
-              }
-              currentSeq = [uniqueRanks[i]];
-            }
-          }
-          // Check if the final sequence qualifies.
-          if (currentSeq.length >= 3) {
-            if (currentSeq.length >= 5) {
-              combos.push({
-                type: "quint",
-                suit: suit,
-                bonus: 100,
-                highestCardRank: currentSeq[currentSeq.length - 1],
-              });
-            } else if (currentSeq.length === 4) {
-              combos.push({
-                type: "quarte",
-                suit: suit,
-                bonus: 50,
-                highestCardRank: currentSeq[currentSeq.length - 1],
-              });
-            } else if (currentSeq.length === 3) {
-              combos.push({
-                type: "tierce",
-                suit: suit,
-                bonus: 20,
-                highestCardRank: currentSeq[currentSeq.length - 1],
-              });
-            }
-          }
-        }
-      });
-      
-      // === SQUARES ===
-      // Count occurrences of each rank.
-      let rankCounts = {};
-      player.hand.forEach(c => {
-        rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1;
-      });
-      // For square_standard: check for each rank among "10", "Q", "K", "A".
-      ["10", "Q", "K", "A"].forEach(rank => {
-        if (rankCounts[rank] === 4) {
-          combos.push({ type: "square_standard", bonus: 100, rank: rank });
-        }
-      });
-      if (rankCounts["9"] === 4) {
-        combos.push({ type: "square_nines", bonus: 150, rank: "9" });
-      }
-      if (rankCounts["J"] === 4) {
-        combos.push({ type: "square_jacks", bonus: 200, rank: "J" });
-      }
-      
-      results[player.id] = combos;
-    });
-    return results;
-  }
-
-  // Process a combination bonus announcement.
-  announceCombination(playerId, combination, io) {
-    const player = this.players.find(p => p.id === playerId);
-    if (!player) return;
-    if (player.hasAnnouncedCombination) {
-      io.to(player.id).emit("error", { message: "Combination already announced" });
-      return;
-    }
-    if (this.gameType === "no trumps") {
-      io.to(player.id).emit("error", { message: "No combinations allowed in No Trumps game" });
-      return;
-    }
-    if (combination.type === "belot" && this.gameType === "suit" && combination.suit !== this.trumpSuit) {
-      io.to(player.id).emit("error", { message: "Belot must be announced in trump suit" });
-      return;
-    }
-    player.hasAnnouncedCombination = true;
-    let bonus = 0;
-    if (combination.type === "belot") bonus = 20;
-    else if (combination.type === "tierce") bonus = 20;
-    else if (combination.type === "quarte") bonus = 50;
-    else if (combination.type === "quint") bonus = 100;
-    else if (combination.type === "square_standard") bonus = 100;
-    else if (combination.type === "square_nines") bonus = 150;
-    else if (combination.type === "square_jacks") bonus = 200;
-    combination.bonus = bonus;
-    const team = player.team;
-    this.combinationAnnouncements[team].push({
-      playerId,
-      type: combination.type,
-      suit: combination.suit,
-      bonus: bonus,
-      highestCardRank: combination.highestCardRank || null
-    });
-    io.to(this.id).emit("combinationAnnounced", { team, combination });
-  }
-
-  // Calculate combination bonus points.
-  calculateCombinationBonuses() {
-    const bonus = { NS: 0, EW: 0 };
-    function getSequenceBonus(type) {
-      if (type === 'tierce') return 20;
-      if (type === 'quarte') return 50;
-      if (type === 'quint') return 100;
-      return 0;
-    }
-    function getSquareBonus(type) {
-      if (type === 'square_standard') return 100;
-      if (type === 'square_nines') return 150;
-      if (type === 'square_jacks') return 200;
-      return 0;
-    }
-    ['NS', 'EW'].forEach(team => {
-      const belots = this.combinationAnnouncements[team].filter(c => c.type === 'belot');
-      if (belots.length > 0) bonus[team] += 20;
-    });
-    const sequenceTypes = ['tierce', 'quarte', 'quint'];
-    const seqAnnouncement = { NS: null, EW: null };
-    ['NS', 'EW'].forEach(team => {
-      const seqs = this.combinationAnnouncements[team].filter(c => sequenceTypes.includes(c.type));
-      if (seqs.length > 0) {
-        seqAnnouncement[team] = seqs.reduce((best, current) => {
-          const currentBonus = getSequenceBonus(current.type);
-          const bestBonus = best ? getSequenceBonus(best.type) : 0;
-          if (currentBonus > bestBonus) return current;
-          else if (currentBonus === bestBonus) {
-            const rankOrder = { 'A': 8, 'K': 7, 'Q': 6, 'J': 5, '10': 4, '9': 3, '8': 2, '7': 1 };
-            if ((current.highestCardRank && best.highestCardRank) &&
-                rankOrder[current.highestCardRank] > rankOrder[best.highestCardRank]) {
-              return current;
-            }
-          }
-          return best;
-        }, null);
-      }
-    });
-    if (seqAnnouncement['NS'] && seqAnnouncement['EW']) {
-      const nsBonus = getSequenceBonus(seqAnnouncement['NS'].type);
-      const ewBonus = getSequenceBonus(seqAnnouncement['EW'].type);
-      if (nsBonus > ewBonus) bonus['NS'] += nsBonus;
-      else if (ewBonus > nsBonus) bonus['EW'] += ewBonus;
-    } else if (seqAnnouncement['NS']) {
-      bonus['NS'] += getSequenceBonus(seqAnnouncement['NS'].type);
-    } else if (seqAnnouncement['EW']) {
-      bonus['EW'] += getSequenceBonus(seqAnnouncement['EW'].type);
-    }
-    const squareAnnouncement = { NS: null, EW: null };
-    ['NS', 'EW'].forEach(team => {
-      const squares = this.combinationAnnouncements[team].filter(c => c.type.startsWith('square'));
-      if (squares.length > 0) {
-        squareAnnouncement[team] = squares.reduce((best, current) => {
-          const currentBonus = getSquareBonus(current.type);
-          const bestBonus = best ? getSquareBonus(best.type) : 0;
-          if (this.gameType === 'suit' && current.suit === this.trumpSuit && (!best || best.suit !== this.trumpSuit)) {
-            return current;
-          }
-          if (currentBonus > bestBonus) return current;
-          return best;
-        }, null);
-      }
-    });
-    if (squareAnnouncement['NS'] && squareAnnouncement['EW']) {
-      const nsBonus = getSquareBonus(squareAnnouncement['NS'].type);
-      const ewBonus = getSquareBonus(squareAnnouncement['EW'].type);
-      const nsIsTrump = (this.gameType === 'suit' && squareAnnouncement['NS'].suit === this.trumpSuit);
-      const ewIsTrump = (this.gameType === 'suit' && squareAnnouncement['EW'].suit === this.trumpSuit);
-      if (nsIsTrump && !ewIsTrump) bonus['NS'] += nsBonus;
-      else if (ewIsTrump && !nsIsTrump) bonus['EW'] += ewBonus;
-      else {
-        if (nsBonus > ewBonus) bonus['NS'] += nsBonus;
-        else if (ewBonus > nsBonus) bonus['EW'] += ewBonus;
-      }
-    } else if (squareAnnouncement['NS']) {
-      bonus['NS'] += getSquareBonus(squareAnnouncement['NS'].type);
-    } else if (squareAnnouncement['EW']) {
-      bonus['EW'] += getSquareBonus(squareAnnouncement['EW'].type);
-    }
-    return bonus;
-  }
-
-
-   // NEW: Detect combinations for a single player.
-   detectCombinationForPlayer(player) {
-    let combos = [];
-    if (!player.hand) return combos;
-    // SEQUENCE detection.
-    const rankOrder = ["7", "8", "9", "10", "J", "Q", "K", "A"];
-    ["hearts", "diamonds", "clubs", "spades"].forEach(suit => {
-      const cardsInSuit = player.hand.filter(c => c.suit === suit).map(c => c.rank);
-      let uniqueRanks = Array.from(new Set(cardsInSuit));
-      uniqueRanks.sort((a, b) => rankOrder.indexOf(a) - rankOrder.indexOf(b));
-      if (uniqueRanks.length > 0) {
-        let currentSeq = [uniqueRanks[0]];
-        for (let i = 1; i < uniqueRanks.length; i++) {
-          if (rankOrder.indexOf(uniqueRanks[i]) === rankOrder.indexOf(uniqueRanks[i - 1]) + 1) {
-            currentSeq.push(uniqueRanks[i]);
-          } else {
-            if (currentSeq.length >= 3) {
-              if (currentSeq.length >= 5) {
-                combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
-              } else if (currentSeq.length === 4) {
-                combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
-              } else if (currentSeq.length === 3) {
-                combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
-              }
-            }
-            currentSeq = [uniqueRanks[i]];
-          }
-        }
-        if (currentSeq.length >= 3) {
-          if (currentSeq.length >= 5) {
-            combos.push({ type: "quint", suit: suit, bonus: 100, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
-          } else if (currentSeq.length === 4) {
-            combos.push({ type: "quarte", suit: suit, bonus: 50, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
-          } else if (currentSeq.length === 3) {
-            combos.push({ type: "tierce", suit: suit, bonus: 20, highestCardRank: currentSeq[currentSeq.length - 1], isChecked: true });
-          }
-        }
-      }
-    });
-    // SQUARE detection.
-    let rankCounts = {};
-    player.hand.forEach(c => {
-      rankCounts[c.rank] = (rankCounts[c.rank] || 0) + 1;
-    });
-    ["10", "Q", "K", "A"].forEach(rank => {
-      if (rankCounts[rank] === 4) {
-        combos.push({ type: "square_standard", bonus: 100, rank: rank, isChecked: true });
-      }
-    });
-    if (rankCounts["9"] === 4) {
-      combos.push({ type: "square_nines", bonus: 150, rank: "9", isChecked: true });
-    }
-    if (rankCounts["J"] === 4) {
-      combos.push({ type: "square_jacks", bonus: 200, rank: "J", isChecked: true });
-    }
-    return combos;
-  }
-
-  // NEW: Compute the final combination for each team once all players have detected their combinations.
-  computeFinalCombinations(io) {
-    let finalCombos = { NS: null, EW: null };
-    const rankOrder = { "A": 8, "K": 7, "Q": 6, "J": 5, "10": 4, "9": 3, "8": 2, "7": 1 };
-    ["NS", "EW"].forEach(team => {
-      let teamCombos = [];
-      this.players.forEach(p => {
-          if (p.team === team && p.detectedCombination !== undefined) {
-            teamCombos = teamCombos.concat(p.detectedCombination);
-          }
-      });
-      if (teamCombos.length === 0) return;
-      // Sort combinations by bonus descending. For sequence types, use highest card as tie-breaker.
-      teamCombos.sort((a, b) => {
-        if (b.bonus !== a.bonus) return b.bonus - a.bonus;
-        if (["tierce", "quarte", "quint"].includes(a.type)) {
-          return (rankOrder[b.highestCardRank] || 0) - (rankOrder[a.highestCardRank] || 0);
-        }
-        return 0;
-      });
-      finalCombos[team] = teamCombos[0];
-    });
-    this.finalCombination = finalCombos;
-    io.to(this.id).emit("finalCombination", { finalCombination: this.finalCombination });
-  }
-
-
-  // Get the point value of a card based on the game type.
-  getCardValue(card) {
-    const trumpValues = { 'A': 11, '10': 10, 'K': 4, 'Q': 3, 'J': 20, '9': 14, '8': 0, '7': 0 };
-    const nonTrumpValues = { 'A': 11, '10': 10, 'K': 4, 'Q': 3, 'J': 2, '9': 0, '8': 0, '7': 0 };
-    if (this.gameType === 'suit') {
-      return card.suit === this.trumpSuit ? trumpValues[card.rank] : nonTrumpValues[card.rank];
-    } else if (this.gameType === 'no trumps') {
-      return nonTrumpValues[card.rank];
-    } else if (this.gameType === 'all trumps') {
-      return trumpValues[card.rank];
-    }
-    return 0;
   }
 
   // End the round: calculate points, update scores, emit "roundEnded", and start a new round.
@@ -740,7 +277,6 @@ module.exports = class Room {
     return true;
   }
   
-
   // Process a card play.
   playCard(playerId, card, io) {
     const currentPlayer = this.players[this.turnIndex];
@@ -839,5 +375,4 @@ module.exports = class Room {
       return this.players.findIndex(p => p.id === winningPlay.playerId);
     }
   }
-  
 };

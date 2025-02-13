@@ -44,9 +44,9 @@ module.exports = {
 
     // Combination bonus announcement.
     socket.on('announce combination', (combination) => {
-      if (playerRoom && player) {
-        playerRoom.announceCombination(player.id, combination, io);
-      }
+      // if (playerRoom && player) {
+      //   playerRoom.announceCombination(player.id, combination, io);
+      // }
     });
 
     // Play a card.
@@ -57,7 +57,11 @@ module.exports = {
     });
 
     socket.on('saveCombinations', ({combinations}) => {
-      playerRoom.finalCombinationAnnouncements[player.team].concat(combinations);
+      if (playerRoom && player) {
+        combinations.forEach(element => {
+          playerRoom.announceCombination(player.id, element, io);
+        });
+      }
     });
 
     // Disconnect.
