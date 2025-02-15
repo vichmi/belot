@@ -144,6 +144,12 @@ export default function Game({ init_room, player }) {
       setShowCombinationBox(true);
     })
 
+    socket.on('announceBelot', data => {
+      if(data.playerId != player.id) {return;}
+      setCombinations(data.combination);
+      setShowCombinationBox(true);
+    });
+
     return () => {
       socket.off('playerJoined');
       socket.off('splitting');
@@ -256,7 +262,7 @@ export default function Game({ init_room, player }) {
         {room.playedCards && room.playedCards.length > 0 && (
           <div className="table-container">
             {room.playedCards.map((play, idx) => {
-              const pos = room.players.findIndex(p => p.id === play.playerId);
+              const pos = players.findIndex(p => p.id === play.playerId);
               return (
                 <img
                   key={idx}
