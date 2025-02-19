@@ -553,6 +553,9 @@ module.exports = class Room {
       }else if(noHand == opponent) {
         totalPoints[this.callingTeam] = 35 + comboBonus.NS;
         totalPoints[opponent] = comboBonus.EW;
+      }else{
+        totalPoints.NS = Math.round(totalPoints.NS/10);
+        totalPoints.EW = Math.round(totalPoints.EW/10);
       }
     }
     this.scores.NS += totalPoints.NS;
@@ -751,25 +754,26 @@ module.exports = class Room {
       console.log('BELOT')
       io.to(this.id).emit('announceBelot', {playerId: player.id, combination: [{ type: "belot", suit: card.suit, bonus: 20 }]});
     }
+    this.turnIndex = (this.turnIndex + 1) % 4;
+    io.to(this.id).emit("cardPlayed", { room: this, playedCards: this.playedCards });
     
     if (this.playedCards.length === 4) {
-      const trickWinnerIndex = this.determineTrickWinner();
-      const winningPlayer = this.players[trickWinnerIndex];
-      this.capturedCards[winningPlayer.team].push(...this.playedCards.map(play => play.card));
-      this.turnIndex = trickWinnerIndex;
-      this.playedCards = [];
-      this.tricksPlayed++;
-      io.to(this.id).emit("trickCompleted", { room: this, playedCards: [] });
-      if (this.tricksPlayed === 8) {
-        this.lastHandTeam = winningPlayer.team;
-        if (this.players.every(p => p.detectedCombination !== undefined)) {
-          this.computeFinalCombinations(io);
+      setTimeout(() => {
+        const trickWinnerIndex = this.determineTrickWinner();
+        const winningPlayer = this.players[trickWinnerIndex];
+        this.capturedCards[winningPlayer.team].push(...this.playedCards.map(play => play.card));
+        this.turnIndex = trickWinnerIndex;
+        this.playedCards = [];
+        this.tricksPlayed++;
+        io.to(this.id).emit("trickCompleted", { room: this, playedCards: [] });
+        if (this.tricksPlayed === 8) {
+          this.lastHandTeam = winningPlayer.team;
+          if (this.players.every(p => p.detectedCombination !== undefined)) {
+            this.computeFinalCombinations(io);
+          }
+          this.endRound(io);
         }
-        this.endRound(io);
-      }
-    } else {
-      this.turnIndex = (this.turnIndex + 1) % 4;
-      io.to(this.id).emit("cardPlayed", { room: this, playedCards: this.playedCards });
+      }, 200);
     }
   }
 
@@ -801,7 +805,7 @@ module.exports = class Room {
     else if (gameType === "all trumps") {
       const trumpOrder = ["J", "9", "A", "10", "K", "Q", "8", "7"];
       const winningPlay = this.playedCards.reduce((best, cur) =>
-        trumpOrder.indexOf(cur.card.rank) < trumpOrder.indexOf(best.card.rank)
+        trumpOrder.indexOf(cur.card.rank) < trumpOrder.indexOf(best.card.rank) && ledSuit == cur.card.suit
           ? cur : best
       );
       return this.players.findIndex(p => p.id === winningPlay.playerId);

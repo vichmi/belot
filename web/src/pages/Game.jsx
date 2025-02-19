@@ -20,6 +20,9 @@ export default function Game({ init_room, player }) {
   const [firstPlacedCard, setFirstPlacedCard] = useState();
   const [combinations, setCombinations] = useState([]);
   const [showCombinationBox, setShowCombinationBox] = useState(false);
+  const [showRoundScore, setShowRoundScore] = useState(false);
+  const [roundPoints, setRoundPoints] = useState({NS: 0, EW: 0});
+  const [collectTrick, setCollectTrick] = useState(false);
 
   // Helper: Sort cards by suit then by rank.
   const sortCards = (cardA, cardB) => {
@@ -102,7 +105,9 @@ export default function Game({ init_room, player }) {
     socket.on('cardPlayed', (data) => {
       const r = data.room;
       setRoom(r);
+      console.log(r);
       setTableCards(data.playedCards);
+      reorderPlayers(r);
       setFirstPlacedCard(data.playedCards[0]);
       console.log(data.playedCards[0].card);
       const myPlayer = r.players.find(p => p.id === player.id);
@@ -113,16 +118,33 @@ export default function Game({ init_room, player }) {
 
     socket.on('trickCompleted', (data) => {
       setRoom(data.room);
-      setTableCards(data.playedCards);
+      setCollectTrick(true);
       const myPlayer = data.room.players.find(p => p.id === player.id);
       if (myPlayer && myPlayer.hand) {
         setCards(myPlayer.hand.filter(card => card != null).sort(sortCards));
       }
+      setFirstPlacedCard();
     });
 
     socket.on('roundEnded', (data) => {
       setRoom(data.room);
-      // Optionally display scores using data.scores
+      setShowRoundScore(true);
+      setRoundPoints(
+        {NS: {
+        trickPoints: data.trickPoints.NS,
+        comboBonus: data.comboBonus.NS,
+        totalPoints: data.totalPoints.NS
+        },
+        EW: {
+          trickPoints: data.trickPoints.EW,
+          comboBonus: data.comboBonus.EW,
+          totalPoints: data.totalPoints.EW
+        }
+      })
+      setTimeout(() => {
+        setRoundPoints({});
+        setShowRoundScore(false);
+      }, 2500);
     });
 
     socket.on('roundRestarted', (data) => {
@@ -135,7 +157,7 @@ export default function Game({ init_room, player }) {
     });
 
     socket.on('error', (data) => {
-      console.error("Socket error:", data.message);
+      console.log("Socket error:", data.message);
     });
 
     socket.on('combinationDetected', data => {
@@ -167,6 +189,7 @@ export default function Game({ init_room, player }) {
 
   // When the local player clicks on a card.
   const handleCardClick = (card) => {
+    if(collectTrick) {return;}
     console.log("Playing card:", card);
     console.log('Room:', room)
     if (room.gameStage === 'playing' && room.turnIndex === userIndex) {
@@ -187,23 +210,53 @@ export default function Game({ init_room, player }) {
       <div className="main-player box">
         {isLocalDealer && <span><b>D</b></span>}
         {room.turnIndex === userIndex && <span><b>Your turn</b></span>}
+        <span>{player.id}</span>
         {cards && cards.length > 0 && (
-          <div className="card-container">
-            {cards.map((card, idx) => (
+          <div
+          className="card-container"
+          style={{
+            position: 'relative',
+            width: 'fit-content',
+            height: 'fit-content',
+            margin: '0 auto',
+          }}
+        >
+          {cards.map((card, idx) => {
+            const maxAngle = 15; // Maximum rotation for the outer cards
+            const mid = (cards.length - 1) / 2;
+            // Compute rotation: center card is 0° and extremes get ±maxAngle
+            const cardAngle =
+              cards.length === 1 ? 0 : ((idx - mid) / mid) * maxAngle;
+            // Horizontal offset for overlapping cards
+            const offsetX = (idx - mid) * 20;
+            // Vertical offset: the further from center, the more the card is lowered
+            const offsetY = Math.abs(idx - mid) * 5;
+            // Use z-index so that the center card appears on top
+            const zIndex = idx;
+        
+            return (
               <img
                 key={idx}
-                className={`card ${firstPlacedCard && card.suit == firstPlacedCard.card.suit ? 'highlightCard' : ''}`}
-                // className={`card`}
+                className={`card ${firstPlacedCard && card.suit === firstPlacedCard.card.suit ? 'highlightCard' : ''} hand`}
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: 0,
+                  transformOrigin: "50% 100%", // Rotate around bottom center
+                  transform: `translateX(${offsetX}px) translateY(${offsetY}px) translateX(-50%) rotate(${cardAngle}deg)`,
+                  zIndex,
+                }}
                 onClick={() => handleCardClick(card)}
                 src={require(`../assets/${card.rank.toLowerCase()}_of_${card.suit.toLowerCase()}.png`)}
                 alt={`${card.rank} ${card.suit}`}
                 width={60}
                 height={80}
               />
-            ))}
-          </div>
+            );
+          })}
+        </div>
+        
         )}
-        <span>{player.id}</span>
       </div>
 
       {/* Other Players Display */}
@@ -213,11 +266,55 @@ export default function Game({ init_room, player }) {
             room &&
             room.dealingPlayerIndex !== undefined &&
             room.players[room.dealingPlayerIndex]?.id === p.id;
+          const mainAngleRotate = index == 3 ? 90 : index == 2 ? 180 : 270;
           if (index === 0) return null;
           return (
-            <div key={index} className={`player${index} box`}>
-              {isDealer && <span><b>D</b></span>}
-              <span>{p.id}</span>
+            <div key={index} className={`player${index} box`} style={{transform: `${index == 2 ? 'translateX(-50%)' : ''} rotate(${mainAngleRotate}deg)`}} >
+                {isDealer && <span><b>D</b></span>}
+                <span>{p.id}</span>
+                <span style={{fontSize: 32}}>{p.hand.length}</span>
+              <div
+                className="card-container"
+                style={{
+                  position: 'relative',
+                  width: 'fit-content',
+                  height: 'fit-content',
+                  margin: '0 auto'
+                }}
+              >
+          {p.hand.map((card, idx) => {
+            const maxAngle = 15; // Maximum rotation for the outer cards
+            const mid = (cards.length - 1) / 2;
+            // Compute rotation: center card is 0° and extremes get ±maxAngle
+            let cardAngle =
+              cards.length === 1 ? 0 : ((idx - mid) / mid) * maxAngle;
+            // Horizontal offset for overlapping cards
+            const offsetX = (idx - mid) * 20;
+            // Vertical offset: the further from center, the more the card is lowered
+            const offsetY = Math.abs(idx - mid) * 5;
+            // Use z-index so that the center card appears on top
+            const zIndex = idx;
+        
+            return (
+              <img
+                key={idx}
+                      className={`hand`}
+                      style={{
+                        position: 'absolute',
+                        left: '50%',
+                        top: 0,
+                        transformOrigin: "50% 100%", // Rotate around bottom center
+                        transform: `translateX(${offsetX}px) translateY(${offsetY}px) translateX(-50%) rotate(${cardAngle}deg)`,
+                        zIndex,
+                      }}
+                      src={require(`../assets/back.png`)}
+                      alt={`${card.rank} ${card.suit}`}
+                      width={60}
+                      height={80}
+                    />
+                  );
+                })}
+              </div>
             </div>
           );
         })}
@@ -259,27 +356,81 @@ export default function Game({ init_room, player }) {
 
 
         {/* Display cards played on the table */}
-        {room.playedCards && room.playedCards.length > 0 && (
           <div className="table-container">
-            {room.playedCards.map((play, idx) => {
-              const pos = players.findIndex(p => p.id === play.playerId);
-              return (
-                <img
-                  key={idx}
-                  className={`card card-placement${pos}`}
-                  src={require(`../assets/${play.card.rank.toLowerCase()}_of_${play.card.suit.toLowerCase()}.png`)}
-                  alt={`${play.card.rank} ${play.card.suit}`}
-                  width={60}
-                  height={80}
-                />
-              );
-            })}
-          </div>
-        )}
+          {tableCards && tableCards.length > 0 ?
+              tableCards.map((play, idx) => {
+                const pos = players.findIndex(p => p.id === play.playerId);
+                const trWinner = players.findIndex(p => p.id == room.players[room.turnIndex].id);
+                const sides = ['bottom', 'right', 'top', 'left'];
+                const winnerClass = collectTrick
+                  ? `collect-${sides[trWinner]}` // e.g. "collect-top", "collect-left", etc.
+                  : '';
+                  console.log(winnerClass)
+                return (
+                  <img
+                    key={idx}
+                    className={`card-placement${pos} table-card ${winnerClass}`}
+                    src={require(`../assets/${play.card.rank.toLowerCase()}_of_${play.card.suit.toLowerCase()}.png`)}
+                    alt={`${play.card.rank} ${play.card.suit}`}
+                    width={60}
+                    height={80}
+                    onAnimationEnd={() => {
+                      setTableCards([]);
+                      setCollectTrick(false);
+                      setTableCards(room.playedCards);
+                    }}
+                  />
+                );
+              }) : <></>
+          }
+        </div>
 
         
         {combinations.length > 0 && showCombinationBox ? <CombinationsAnnounce combinations={combinations} setShowCombinationBox={setShowCombinationBox} /> : <></>}
       </div>
+
+      <div className='score-container'>
+          <table>
+            <tr>
+              <th>Us</th>
+              <th>Others</th>
+            </tr>
+            <tr>
+              <td>{room.scores[player.team]}</td>
+              <td>{room.scores[player.team == 'NS' ? 'EW' : 'NS']}</td>
+            </tr>
+          </table>
+      </div>
+
+      {showRoundScore ? <div className='round-score-container'>
+          <table>
+
+            <tr>
+              <th></th>
+              <th>Us</th>
+              <th>Others</th>
+            </tr>
+
+            <tr>
+              <td>Hands:</td>
+              <td>{roundPoints[player.team].trickPoints}</td>
+              <td>{roundPoints[player.team == 'NS' ? 'EW' : 'NS'].trickPoints}</td>
+            </tr>
+
+            <tr>
+              <td>Announcements:</td>
+              <td>{roundPoints[player.team].comboBonus}</td>
+              <td>{roundPoints[player.team == 'NS' ? 'EW' : 'NS'].comboBonus}</td>
+            </tr>
+
+            <tr>
+              <td>Total:</td>
+              <td>{roundPoints[player.team].totalPoints}</td>
+              <td>{roundPoints[player.team == 'NS' ? 'EW' : 'NS'].totalPoints}</td>
+            </tr>
+
+          </table>
+      </div> : ''}
     </div>
   );
 }
