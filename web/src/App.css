@@ -39,10 +39,14 @@ body, html {
     flex-direction: column;   
 }
 
-.main-player {
+/* .main-player {
     bottom: 10%;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(-50%); */
+/* } */
+.player0 {
+    bottom: 10%;
+    left: 50%;
 }
 
 .player1 {
@@ -203,7 +207,7 @@ body, html {
 	animation-iteration-count: 1;
 	animation-timing-function: ease-in;
     color: white;
-	animation-duration: 1s;
+	animation-duration: 3s;
     display: flex;
     justify-content: center;
     align-items: center;

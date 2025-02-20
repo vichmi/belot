@@ -1,9 +1,12 @@
 // src/components/Announcements.jsx
 import React from 'react';
-import { socket } from '../lib/socket';
+import { useSocket } from '../contexts/SocketContext';
+// import { socket } from '../lib/socket';
+
 
 export default function Announcements({ room, player }) {
   // Define each announcement option with a display name and normalized value.
+  const {socket} = useSocket();
   const announcementOptions = [
     { display: 'Clubs', value: 'clubs' },
     { display: 'Diamonds', value: 'diamonds' },

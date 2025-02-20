@@ -1,8 +1,8 @@
 import React from 'react'
-import { socket } from '../lib/socket'
+import { useSocket } from '../contexts/SocketContext';
 
 export default function CombinationsAnnounce({combinations, setShowCombinationBox}) {
-
+    const {socket} = useSocket();
     const sendWantedAnnounce = () => {
         console.log(combinations)
         socket.emit('saveCombinations', {combinations: combinations.filter(c => c.isChecked == true)});

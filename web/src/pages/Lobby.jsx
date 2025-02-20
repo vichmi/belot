@@ -1,8 +1,9 @@
 import React from 'react'
-import { socket } from '../lib/socket';
+import { useSocket } from '../contexts/SocketContext';
+
 
 export default function Lobby({rooms}) {
-    
+    const {socket} = useSocket();
     const joinRoom = r => {
         socket.emit('join room', r);
     }
