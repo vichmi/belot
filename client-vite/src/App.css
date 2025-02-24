@@ -1,0 +1,298 @@
+* {
+    margin: 0;
+    padding: 0;
+}
+
+body, html {
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.Lobby {
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.rooms-table {
+    width: 50%;
+    border: 1px solid black;
+}
+
+.Game {
+    width: 100%;
+    height: 100vh;
+}
+
+.box {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 200px;
+    height: 10px;
+    position: absolute;
+    flex-direction: column;   
+}
+
+/* .main-player {
+    bottom: 10%;
+    left: 50%;
+    transform: translateX(-50%); */
+/* } */
+.player0 {
+    bottom: 10%;
+    left: 50%;
+}
+
+.player1 {
+    right: 5%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.player2 {
+    top: 7%;
+    left: 50%;
+}
+
+.player3 {
+    left: 5%;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.playing-sector {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+
+.hand:hover {
+    cursor: pointer;
+    border: 2px solid black;
+}
+
+.splitCards {
+    display: flex;
+    flex-direction: row;
+    justify-self: center;
+    align-self: center;
+    z-index: 99;
+}
+
+.splitCards * {
+    margin-left: -55px;
+}
+
+.announcements-container {
+    display: flex;
+    margin-right: 25px;
+    text-align: center;
+    z-index: 99;
+    background-color: white;
+}
+
+.announcement-container:hover {
+    background-color: antiquewhite;
+    cursor: pointer;
+}
+
+.non-active {
+    opacity: 50%;
+}
+.non-active:hover {
+    background-color: white;
+    cursor: default;
+}
+
+.announcement-container {
+    display: flex;
+    flex-direction: column;
+    width: 80px;
+    align-items: center;
+    border: 1px solid black;
+}
+.announcements-span {
+    vertical-align: bottom;
+}
+
+.announcements-title {
+    font-size: 36px;
+}
+
+.table-container {
+    position: absolute;
+    width: 30vw;
+    height: 30vw;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* display: grid; */
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(40, 148, 40);
+    border-radius: 50%;
+}
+
+.table-card {
+    position: absolute;
+}
+
+.card-placement0 { /* Bottom Center */
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.card-placement1 { /* Right Center */
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%) rotate(-75deg);
+}
+
+.card-placement2 { /* Top Center */
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.card-placement3 { /* Left Center */
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    transform: translateY(-50%) rotate(75deg);
+}
+
+.highlightCard {
+    border: 2px solid blue;
+}
+
+.score-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+.score-container table {
+    border-collapse: collapse;
+}
+.score-container table td, .score-container table th {
+    border: 1px solid black;
+    padding: 8px;
+    font-size: 24px;
+    text-align: center;
+}
+
+.round-score-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-50%);
+    width: 544px;
+    height: 300px;
+    background-color: black;
+    border: 2px solid black;
+    animation-name: fadeInOpacity;
+	animation-iteration-count: 1;
+	animation-timing-function: ease-in;
+    color: white;
+	animation-duration: 3s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* animation: fa; */
+}
+
+.round-score-container table {
+    width: 100%;
+    height: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    padding: 0;
+}
+.round-score-container table td, .round-score-container table th {
+    border: 1px solid white;
+    text-align: center;
+    font-size: 24px;
+    width: 180px;
+}
+
+
+@keyframes fadeInOpacity {
+	0% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 80%;
+	}
+}
+
+/* Example "collect to top" animation */
+.collect-top {
+    animation: collectTop 1s forwards;
+  }
+  
+  @keyframes collectTop {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(0, -300px) scale(0.2);
+      opacity: 0;
+    }
+  }
+  
+  /* Example "collect to bottom" animation */
+  .collect-bottom {
+    animation: collectBottom 1s forwards;
+  }
+  
+  @keyframes collectBottom {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(0, 300px) scale(0.2);
+      opacity: 0;
+    }
+  }
+  
+  /* Example "collect to left" animation */
+  .collect-left {
+    animation: collectLeft 1s forwards;
+  }
+  
+  @keyframes collectLeft {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(-300px, 0) scale(0.2);
+      opacity: 0;
+    }
+  }
+  
+  /* Example "collect to right" animation */
+  .collect-right {
+    animation: collectRight 1s forwards;
+  }
+  
+  @keyframes collectRight {
+    0% {
+      transform: translate(0, 0) scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(300px, 0) scale(0.2);
+      opacity: 0;
+    }
+  }
+  

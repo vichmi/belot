@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import './App.css';
 import Game from "./pages/Game";
 import Lobby from "./pages/Lobby";
 import { SocketProvider, useSocket } from "./contexts/SocketContext";
+import LandingPage from "./pages/LandingPage";
+import './App.css';
 
 function AppContent() {
   const { socket } = useSocket();
@@ -32,7 +33,8 @@ function AppContent() {
     };
   }, [socket]);
 
-  return room.id === undefined ? <Lobby rooms={rooms} /> : <Game init_room={room} player={player} />;
+  // return room.id === undefined ? <Lobby rooms={rooms} /> : <Game init_room={room} player={player} />;
+  return <LandingPage />;
 }
 
 function App() {

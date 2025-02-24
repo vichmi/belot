@@ -1,6 +1,5 @@
 // src/components/Game.jsx
 import React, { useEffect, useState } from 'react';
-import { socket } from '../lib/socket';
 import Announcements from './Announcements';
 import CombinationsAnnounce from './CombinationsAnnounce';
 import RoundScore from '../components/RoundScore';
@@ -29,19 +28,7 @@ export default function Game({ init_room, player }) {
   const [collectTrick, setCollectTrick] = useState(false);
 
   // Helper: Sort cards by suit then by rank.
-  const sortCards = (cardA, cardB) => {
-    if (!cardA && !cardB) return 0;
-    if (!cardA) return 1;
-    if (!cardB) return -1;
-    const suitOrder = ['spades', 'hearts', 'diamonds', 'clubs'];
-    const suitIndexA = suitOrder.indexOf(cardA.suit);
-    const suitIndexB = suitOrder.indexOf(cardB.suit);
-    if (suitIndexA !== suitIndexB) {
-      return suitIndexA - suitIndexB;
-    }
-    const rankOrder = { '7': 1, '8': 2, '9': 3, '10': 4, 'J': 5, 'Q': 6, 'K': 7, 'A': 8 };
-    return rankOrder[cardA.rank] - rankOrder[cardB.rank];
-  };
+  
 
   // Reorder players so that the local player is first.
   const reorderPlayers = (r) => {
@@ -54,14 +41,13 @@ export default function Game({ init_room, player }) {
     setPlayers(reordered);
   };
 
-  useGameSocket({setRoom, setPlayers, sortCards, player, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit});
+  useGameSocket({setRoom, setPlayers, player, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit});
 
   return (
     <div className="Game">
-      {/* Other Players Display */}
       {players.length === 4 ?
         players.map((p, index) => 
-          <PlayerComponent key={index} index={index} player={p} cards={cards} room={room} firstPlacedCard={firstPlacedCard} collectTrick={collectTrick} userIndex={userIndex} />
+          <PlayerComponent key={index} index={index} player={p} reorderPlayers={reorderPlayers} room={room} firstPlacedCard={firstPlacedCard} collectTrick={collectTrick} userIndex={userIndex} />
         )
       : ''}
 

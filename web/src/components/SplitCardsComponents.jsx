@@ -10,7 +10,7 @@ export default function SplitCardsComponents({setISplit}) {
           {unknownCards.map((_, idx) => (
             <img
               key={idx}
-              className="card"
+              className="hand card"
               src={require('../assets/back.png')}
               alt="unknown card"
               width={60}

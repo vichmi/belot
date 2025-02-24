@@ -1,8 +1,29 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { useSocket } from '../contexts/SocketContext';
+import cardRankOrder  from '../constants/cardRankOder';
 
+export default function PlayerComponent({index, player, room, firstPlacedCard, collectTrick, userIndex, reoderPlayers}) {
 
-export default function PlayerComponent({index, player, cards, room, firstPlacedCard, collectTrick, userIndex}) {
+  const sortCards = (cardA, cardB) => {
+      if (!cardA && !cardB) return 0;
+      if (!cardA) return 1;
+      if (!cardB) return -1;
+      const suitOrder = ['spades', 'hearts', 'diamonds', 'clubs'];
+      const suitIndexA = suitOrder.indexOf(cardA.suit);
+      const suitIndexB = suitOrder.indexOf(cardB.suit);
+      if (suitIndexA !== suitIndexB) {
+        return suitIndexA - suitIndexB;
+      }
+      const DEFAULT_RANK_ORDER = { '7': 1, '8': 2, '9': 3, '10': 4, 'J': 5, 'Q': 6, 'K': 7, 'A': 8 };
+      let rankOrder = DEFAULT_RANK_ORDER;
+      if(room.gameType == 'suit' && cardA.suit == room.trumpSuit && cardA.suit == cardB.suit) {
+        rankOrder = { '7': 1, '8': 2, 'Q': 3, 'K': 4, '10': 5, 'A': 6, '9': 7, 'J': 8 };
+      }else if(room.gameType == 'all trumps') {
+        rankOrder = { '7': 1, '8': 2, 'Q': 3, 'K': 4, '10': 5, 'A': 6, '9': 7, 'J': 8 };
+      }
+      return rankOrder[cardA.rank] - rankOrder[cardB.rank];
+  };
+
   const isDealer =
             room &&
             room.dealingPlayerIndex !== undefined &&
@@ -13,18 +34,18 @@ export default function PlayerComponent({index, player, cards, room, firstPlaced
   // When the local player clicks on a card.
   const handleCardClick = (card) => {
     if(collectTrick) {return;}
-    console.log("Playing card:", card);
-    console.log('Room:', room)
     if (room.gameStage === 'playing' && room.turnIndex === userIndex) {
       socket.emit('play card', card);
     }
   };
+  player.hand = player.hand.sort(sortCards);
 
   return (
     <div className={`player${index} box`} style={{transform: `${index == 2 || index == 0 ? 'translateX(-50%)' : ''} rotate(${mainAngleRotate}deg)`}} >
         {isDealer && <span><b>D</b></span>}
         <span>{player.id}</span>
         <span style={{fontSize: 32}}>{player.hand.length}</span>
+        {room.turnIndex == userIndex && <span><b>Your Turn</b></span>}
       <div
         className="card-container"
         style={{
@@ -34,8 +55,8 @@ export default function PlayerComponent({index, player, cards, room, firstPlaced
           margin: '0 auto'
         }}
       >
-      {player.hand.map((card, idx) => {
-        console.log(card);
+      {player.hand.length > 0 && player.hand.map((card, idx) => {
+        console.log(player.hand.length)
         const maxAngle = 15; // Maximum rotation for the outer cards
         const mid = (player.hand.length - 1) / 2;
         // Compute rotation: center card is 0° and extremes get ±maxAngle
@@ -47,11 +68,17 @@ export default function PlayerComponent({index, player, cards, room, firstPlaced
         const offsetY = Math.abs(idx - mid) * 5;
         // Use z-index so that the center card appears on top
         const zIndex = idx;
-
+        let highlightCard = false;
+        if(index == 0 && firstPlacedCard && firstPlacedCard.card.suit == card.suit) {
+          highlightCard = true;
+          if(room.gameType == 'all trumps' && player.hand.some(c => c.suit == firstPlacedCard.card.suit && cardRankOrder['all trumps'][c.rank] > cardRankOrder['all trumps'][firstPlacedCard.card.rank] && c != card)) {
+            highlightCard = false;
+          }
+        }
         return (
           <img
                   key={idx}
-                  className={`hand card ${index == 0 && firstPlacedCard && card.suit == firstPlacedCard.suit ? 'highlightCard' : ''}`}
+                  className={`${index == 0 ? 'hand' : ''} card ${highlightCard ? 'highlightCard' : ''}`}
                   style={{
                     position: 'absolute',
                     left: '50%',
@@ -71,6 +98,7 @@ export default function PlayerComponent({index, player, cards, room, firstPlaced
                 />
               );
         })}
+        <hr style={{border: '2px solid black'}}/>
       </div>
     </div>
   );
