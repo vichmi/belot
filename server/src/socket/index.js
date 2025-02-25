@@ -8,7 +8,7 @@ const rooms = [new Room(1, 'Development')];
 module.exports = {
   init(socket, io) {
     // Send initial room data.
-    socket.emit('init', { rooms });
+    socket.emit('get rooms', { rooms });
 
     let playerRoom = null;
     let player = null;

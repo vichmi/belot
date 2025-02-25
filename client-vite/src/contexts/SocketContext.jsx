@@ -9,7 +9,6 @@ export const SocketProvider = ({children}) => {
     useEffect(() => {
         const newSocket = io(SOCKET_SERVER_URL);
         setSocket(newSocket);
-
         return () => {
             newSocket.disconnect();
         }

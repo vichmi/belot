@@ -1,15 +1,29 @@
-const {createServer} = require('http');
-const {Server} = require('socket.io');
-require('dotenv').config();
-const httpServer = createServer();
-
-const PORT = process.env.PORT;
-
-const io = new Server(httpServer, {
+const express = require('express');
+const app = express();
+const http = require('http');
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
+const io = new Server(server, {
     cors: {
         origin: 'http://localhost:5173'
     }
 });
+require('dotenv').config();
+
+app.use(cors({
+    origin: 'http://localhost:5173',
+    credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+const PORT = process.env.PORT;
+
+const routes = require('./routes/index');
+app.use('/', routes);
 
 const gameSocket = require('./socket');
 
@@ -17,7 +31,7 @@ io.on('connection', socket => {
     gameSocket.init(socket, io);
 });
 
-httpServer.listen(PORT, err => {
+server.listen(PORT, err => {
     if(err) {
         process.exit(1);
     }

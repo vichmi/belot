@@ -8,9 +8,13 @@ import TableComponent from '../components/TableComponent';
 import SplitCardsComponents from '../components/SplitCardsComponents';
 import PlayerComponent from '../components/PlayerComponent';
 import useGameSocket from '../hooks/useGameSocket';
+import '../Game.css'
+import { useLocation } from 'react-router';
 
 
-export default function Game({ init_room, player }) {
+export default function Game() {
+  const {state} = useLocation();
+  const {init_room, player} = state;
   const [room, setRoom] = useState(init_room);
   const [players, setPlayers] = useState(init_room.players || []);
   const [cards, setCards] = useState([]);
