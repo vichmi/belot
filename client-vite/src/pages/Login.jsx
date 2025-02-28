@@ -10,7 +10,6 @@ export default function LandingPage() {
     axios.post('/auth/login', { username, password }, {withCredentials: true})
       .then(res => {
         if (res.status === 200) {
-          console.log('Login successful')
           window.location.href = '/'
         }
       })

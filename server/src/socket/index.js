@@ -1,6 +1,7 @@
 // server/index.js
 const Room = require('../game/room');
 const Player = require('../game/player');
+const db = require('../config/db');
 
 // Create a single room (you can expand this to multiple or dynamic rooms).
 const rooms = [new Room(1, 'Development')];
@@ -8,10 +9,26 @@ const rooms = [new Room(1, 'Development')];
 module.exports = {
   init(socket, io) {
     // Send initial room data.
-    socket.emit('get rooms', { rooms });
-
     let playerRoom = null;
     let player = null;
+    
+    socket.on('joinRoom', ({roomName}) => {
+      const query = `select * from rooms where name = ${roomName}`;
+      db.query(query, (err, result) => {
+        if(err || result.length == 0) {
+          socket.emit('error', { message: "Room not found" });
+          return;
+        }
+        if(result[0].joinedPlayers >= 4){
+          socket.emit('error', { message: "Room is full" });
+          return;
+        }
+
+        playerRoom = JSON.parse(result[0].state);
+
+      });
+    });
+
 
     // --- Client-to-Server Events ---
 

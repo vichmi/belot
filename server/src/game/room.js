@@ -1,6 +1,5 @@
 module.exports = class Room {
-  constructor(id, name) {
-    this.id = id;
+  constructor(name) {
     this.name = name;
     this.players = [];
     this.deck = this.createDeck();

@@ -1,0 +1,21 @@
+!!! FIX ROOM LOGIC !!!
+!!! Check if game works correctly !!!
+Equal points rules
+Turn timers
+Room chat
+Refresh button in lobby
+Filters in lobby
+Players join with their username  
+If player leaves wait for him to finish his turn and the a bot joins on his spot 
+If player rejoins remove the bot
+Player invites ->
+    Friends list
+    Copy invite code
+    Share invite link
+    Join private game with code
+Player profile
+    Profile picture
+    Country flag
+    Wins/losses
+    Friends list
+    Block list     
