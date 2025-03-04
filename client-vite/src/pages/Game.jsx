@@ -16,11 +16,11 @@ import { useSocket } from '../contexts/SocketContext';
 export default function Game() {
   // const {state} = useLocation();
   const {socket} = useSocket();
-  const {init_room, player} = {};
+  const [player, setPlayer] = useState({});
   const [room, setRoom] = useState({});
   const [players, setPlayers] = useState([]);
   const [cards, setCards] = useState([]);
-  const [userIndex, setUserIndex] = useState();
+  const [userIndex, setUserIndex] = useState(-1);
   const [tableCards, setTableCards] = useState([]);
   const [iSplit, setISplit] = useState(false);
   const [showAnnouncements, setShowAnnouncements] = useState(false);
@@ -30,15 +30,6 @@ export default function Game() {
   const [showRoundScore, setShowRoundScore] = useState(false);
   const [roundPoints, setRoundPoints] = useState({NS: 0, EW: 0});
   const [collectTrick, setCollectTrick] = useState(false);
-
-  useEffect(() => {
-    if(!socket) {return;}
-    console.log(socket)
-    socket.emit('joinRoom', {roomName: window.location.href.match(/\/game\/(.*)/)[1]});
-    return () => {
-      // socket.off('')
-    }
-  }, []);
 
   const reorderPlayers = (r) => {
     const idx = r.players.findIndex(p => p.id === player.id);
@@ -50,32 +41,37 @@ export default function Game() {
     setPlayers(reordered);
   };
 
-  useGameSocket({setRoom, setPlayers, player, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit});
+  useEffect(() => {
+    if(!socket) {return;}
+    socket.emit('joinRoom', {roomName: window.location.href.match(/\/game\/(.*)/)[1]});
+  }, [socket]);
 
-  return (
-    // <div className="Game">
-    //   { players.length === 4 ?
-    //     players.map((p, index) => 
-    //       <PlayerComponent key={index} index={index} player={p} reorderPlayers={reorderPlayers} room={room} firstPlacedCard={firstPlacedCard} collectTrick={collectTrick} userIndex={userIndex} />
-    //     )
-    //   : ''}
+  useGameSocket({setRoom, setPlayers, userIndex, setUserIndex, player, setPlayer, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit});
+  // console.log(room);
+  return Object.keys(room).length == 0 ? <span>Loading</span> : (
+    <div className="Game">
+      { players.length === 4 ?
+        players.map((p, index) => 
+          <PlayerComponent key={index} index={index} player={p} reorderPlayers={reorderPlayers} room={room} firstPlacedCard={firstPlacedCard} collectTrick={collectTrick} userIndex={userIndex} />
+        )
+      : ''}
 
-    //   {/* Playing Sector */}
-    //   <div className="playing-sector box">
-    //     {iSplit && (
-    //       <SplitCardsComponents setISplit={setISplit} />
-    //     )}
-    //     {room.turnIndex === userIndex && showAnnouncements && (
-    //       <Announcements room={room} player={player} />
-    //     )}
-    //     <TableComponent room={room} collectTrick={collectTrick} tableCards={tableCards} players={players} setTableCards={setTableCards} setCollectTrick={setCollectTrick} />
-    //     {room.players.length < 4 && <h2 className='z-1'>Waiting for players {room.players.length}/4</h2>}
-    //   </div>
-    //   {combinations.length > 0 && showCombinationBox && <CombinationsAnnounce combinations={combinations} setCombinations={setCombinations} setShowCombinationBox={setShowCombinationBox} />}
-    //   <ScoreTable player={player} room={room} />
+      {/* Playing Sector */}
+      <div className="playing-sector box">
+        {iSplit && (
+          <SplitCardsComponents setISplit={setISplit} />
+        )}
+        {room.turnIndex === userIndex && showAnnouncements && (
+          <Announcements room={room} player={player} />
+        )}
+        <TableComponent room={room} collectTrick={collectTrick} tableCards={tableCards} players={players} setTableCards={setTableCards} setCollectTrick={setCollectTrick} />
+        {room.players.length < 4 && <h2 className='z-1'>Waiting for players {room.players.length}/4</h2>}
+      </div>
+      {combinations.length > 0 && showCombinationBox && <CombinationsAnnounce combinations={combinations} setCombinations={setCombinations} setShowCombinationBox={setShowCombinationBox} />}
+      <ScoreTable player={player} room={room} />
 
-    //   {showRoundScore ? <RoundScore player={player} roundPoints={roundPoints} /> : ''}
-    // </div>
-    <div>game</div>
+      {showRoundScore ? <RoundScore player={player} roundPoints={roundPoints} /> : ''}
+    </div>
+    // <div>game</div>
   );
 }

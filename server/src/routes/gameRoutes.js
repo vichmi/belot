@@ -53,13 +53,7 @@ router.post('/joinRoom', (req, res) => {
       if(result[0].joinedPlayers >= 4){
          return res.status(500).send('Room is full.');
       }
-
-      db.query(`update rooms set joinedPlayers = joinedPlayers + 1 where name = '${req.body.roomName}'`, (err, ress) => {
-         if(err) {
-            return res.status(500).send('Room name does not exist or something is wrong.');
-         }
-         res.status(200).send('Room joined successfully.');
-      });
+      res.status(200).send('Room set successfully.');
    });
 });
 

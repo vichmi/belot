@@ -2,47 +2,59 @@
 const Room = require('../game/room');
 const Player = require('../game/player');
 const db = require('../config/db');
+const jwt = require('jsonwebtoken');
 
 // Create a single room (you can expand this to multiple or dynamic rooms).
-const rooms = [new Room(1, 'Development')];
+const activeRooms = {};
 
 module.exports = {
   init(socket, io) {
     // Send initial room data.
     let playerRoom = null;
     let player = null;
-    
+    const cookies = socket.handshake.headers.cookie;
+    if (!cookies) return new Error("Unauthorized");
+    const matchToken = socket.request.headers.cookie.match(/token=([^;]+)/);
+    let token;
+    if(matchToken) {
+      token = matchToken[1];
+    }else{
+      console.log("token not found");
+    }
     socket.on('joinRoom', ({roomName}) => {
-      const query = `select * from rooms where name = ${roomName}`;
-      db.query(query, (err, result) => {
-        if(err || result.length == 0) {
-          socket.emit('error', { message: "Room not found" });
-          return;
-        }
-        if(result[0].joinedPlayers >= 4){
-          socket.emit('error', { message: "Room is full" });
-          return;
-        }
-
-        playerRoom = JSON.parse(result[0].state);
-
-      });
-    });
-
-
-    // --- Client-to-Server Events ---
-
-    // Join room.
-    socket.on('join room', (roomData) => {
-      playerRoom = rooms.find(r => r.id === roomData.id);
+      playerRoom = activeRooms[roomName];
       if (!playerRoom) {
-        return socket.emit('error', { message: "Room not found" });
+        db.query(`select * from rooms where name = '${roomName}'`, (err, result) => {
+          if(err || result.length == 0) {
+            socket.emit('error', { message: "Room not found" });
+            return;
+          }
+        });
+        playerRoom = new Room(roomName);
+        activeRooms[roomName] = playerRoom;
+        // db.query(`update rooms set name = '${roomName}', state = '${JSON.stringify(playerRoom)}', joinedPlayers = '1')`, (err, res) => {
+        //   if(err) {
+        //     console.log(err);
+        //   }
+        // });
       }
-      if (playerRoom.players.length >= 4) {
-        return socket.emit('error', { message: "Room is full" });
+      if(playerRoom.players.filter(player => player.name === jwt.decode(token).username).length > 0) {
+        socket.emit('error', { message: "You are already in the room" });
+        return;
       }
-      player = new Player(socket.id);
+
+      player = new Player(jwt.decode(token).username);
       playerRoom.addPlayer(player, socket, io);
+      
+      db.query(`update rooms set state = '${JSON.stringify(playerRoom)}', joinedPlayers = '${playerRoom.players.length}' where name = '${roomName}'`, (err, res) => {
+        if(err) {
+          console.log(err);
+        }
+      });
+      if(playerRoom.players.length > 4){
+        socket.emit('error', { message: "Room is full" });
+        return;
+      }
     });
 
     // Splitting the deck (called by the dealer).
@@ -85,6 +97,11 @@ module.exports = {
     socket.on('disconnect', () => {
       if (playerRoom && player) {
         playerRoom.removePlayer(player, socket, io);
+        db.query(`update rooms set state = '${JSON.stringify(playerRoom)}', joinedPlayers = '${playerRoom.players.length}' where name = '${playerRoom.name}'`, (err, res) => {
+          if(err) {
+            console.log(err);
+          }
+        });
       }
     });
   }

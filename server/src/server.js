@@ -7,7 +7,8 @@ const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const io = new Server(server, {
     cors: {
-        origin: 'http://localhost:5173'
+        origin: 'http://localhost:5173',
+        credentials: true
     }
 });
 require('dotenv').config();
@@ -29,6 +30,21 @@ const gameSocket = require('./socket');
 
 io.on('connection', socket => {
     gameSocket.init(socket, io);
+});
+io.on('error', function(e) {
+    if(e.code == 'ECONNREFUSED') {
+        console.log('Is the server running at ' + PORT + '?');
+
+        client.setTimeout(4000, function() {
+            client.connect(PORT, HOST, function(){
+                console.log('CONNECTED TO: ' + HOST + ':' + PORT);
+                client.write('I am the inner superman');
+            });
+        });
+
+        console.log('Timeout for 5 seconds before trying port:' + PORT + ' again');
+
+    }   
 });
 
 server.listen(PORT, err => {

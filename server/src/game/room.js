@@ -54,9 +54,10 @@ module.exports = class Room {
       player.hand = [];
       player.hasAnnouncedCombination = false;
       this.players.push(player);
-      socket.join(this.id);
-      socket.emit('userJoined', { room: this, player });
-      io.to(this.id).emit('playerJoined', { room: this });
+      socket.join(this.name);
+      // socket.emit('userJoined', { room: this, player });
+      io.to(this.name).emit('playerJoined', { room: this });
+      socket.emit('initPlayer', {room:this, player})
       if (this.players.length === 4) {
         this.nextRound(io);
       }
@@ -66,8 +67,8 @@ module.exports = class Room {
   // Remove a player from the room.
   removePlayer(player, socket, io) {
     this.players = this.players.filter(p => p.id !== player.id);
-    socket.leave(this.id);
-    io.to(this.id).emit('playerDisconnected', { room: this });
+    socket.leave(this.name);
+    io.to(this.name).emit('playerDisconnected', { room: this });
   }
   // Start the next round.
   nextRound(io) {
@@ -75,7 +76,7 @@ module.exports = class Room {
       this.deck = this.createDeck();
       this.dealingPlayerIndex = (this.dealingPlayerIndex + 1) % 4;
       this.announcements = [];
-      io.to(this.id).emit("splitting", { room: this });
+      io.to(this.name).emit("splitting", { room: this });
       return;
     }
     this.announcements = [];
@@ -92,7 +93,7 @@ module.exports = class Room {
     // For announcing, the turn starts with the player immediately anti-clockwise to the dealer.
     this.turnIndex = (this.dealingPlayerIndex + 1) % 4;
     this.deck = this.createDeck();
-    io.to(this.id).emit("splitting", { room: this });
+    io.to(this.name).emit("splitting", { room: this });
   }
 
   // Deal the initial five cards to every player (first three then two).
@@ -110,7 +111,7 @@ module.exports = class Room {
       });
     }
     this.deck = deckCopy;
-    io.to(this.id).emit("initialCardsDealt", { room: this });
+    io.to(this.name).emit("initialCardsDealt", { room: this });
     this.gameStage = 'dealing';
   }
 
@@ -142,7 +143,7 @@ module.exports = class Room {
       // If a pass is given and all four are passes, restart the round.
       if (this.announcements.length === 3 && this.announcements.every(a => a === "pass")) {
         this.players.forEach(player => player.hand = []);
-        io.to(this.id).emit("announcementMade", { room: this, lastAnnouncement: announcement });
+        io.to(this.name).emit("announcementMade", { room: this, lastAnnouncement: announcement });
         this.nextRound(io);
         return;
       }
@@ -152,14 +153,14 @@ module.exports = class Room {
     // Advance turn anti-clockwise.
     this.turnIndex = (this.turnIndex + 1) % 4;
     if(announcement == 'pass') {
-      io.to(this.id).emit("announcementMade", { room: this, lastAnnouncement: announcement });
+      io.to(this.name).emit("announcementMade", { room: this, lastAnnouncement: announcement });
     }
     
     // Termination Conditions:
     // (1) All four players pass → round reset.
     // if (this.announcements.length === 4 && this.announcements.every(a => a === "pass")) {
     //   this.deck = this.createDeck();
-    //   io.to(this.id).emit("roundRestarted", { room: this });
+    //   io.to(this.name).emit("roundRestarted", { room: this });
     //   return;
     // }
     // (2) "All trumps" bid ends bidding immediately.
@@ -181,7 +182,7 @@ module.exports = class Room {
       this.dealRestCards(io);
       return;
     }
-    io.to(this.id).emit("announcementMade", { room: this, lastAnnouncement: announcement });
+    io.to(this.name).emit("announcementMade", { room: this, lastAnnouncement: announcement });
   }
 
   // Deal the remaining three cards so that each player ends up with eight cards.
@@ -194,7 +195,7 @@ module.exports = class Room {
     this.gameStage = 'playing';
     // The announcing turn starts with the player immediately anti-clockwise to the dealer.
     this.turnIndex = (this.dealingPlayerIndex + 1) % 4;
-    io.to(this.id).emit("restCardsDealt", { room: this });
+    io.to(this.name).emit("restCardsDealt", { room: this });
     console.log(this.detectCombinations());
   }
 
@@ -334,7 +335,7 @@ module.exports = class Room {
       bonus: bonus,
       highestCardRank: combination.highestCardRank || null
     });
-    io.to(this.id).emit("combinationAnnounced", { team, combination });
+    io.to(this.name).emit("combinationAnnounced", { team, combination });
   }
 
   calculateCombinationBonuses() {
@@ -505,7 +506,7 @@ module.exports = class Room {
       finalCombos[team] = teamCombos[0];
     });
     this.finalCombination = finalCombos;
-    io.to(this.id).emit("finalCombination", { finalCombination: this.finalCombination });
+    io.to(this.name).emit("finalCombination", { finalCombination: this.finalCombination });
   }
 
 
@@ -569,7 +570,7 @@ module.exports = class Room {
     }else{
       this.nextRound(io);
     }
-    io.to(this.id).emit("roundEnded", {
+    io.to(this.name).emit("roundEnded", {
       room: this,
       trickPoints,
       comboBonus,
@@ -725,7 +726,7 @@ module.exports = class Room {
   playCard(playerId, card, io) {
     const currentPlayer = this.players[this.turnIndex];
     if (currentPlayer.id !== playerId) {
-      io.to(this.id).emit("error", { message: "Not your turn" });
+      io.to(this.name).emit("error", { message: "Not your turn" });
       return;
     }
     
@@ -733,7 +734,7 @@ module.exports = class Room {
     if (!player) return;
     
     if (!this.isValidMove(player, card)) {
-      io.to(this.id).emit("error", { message: "Invalid move" });
+      io.to(this.name).emit("error", { message: "Invalid move" });
       return;
     }
    
@@ -745,7 +746,7 @@ module.exports = class Room {
         card.rank == 'K' && player.hand.some(c => c.suit == card.suit && c.rank == 'Q'))) {
         player.detectedCombination.push({ type: "belot", suit: card.suit, bonus: 20, isChecked: true });
       }
-      io.to(this.id).emit("combinationDetected", { playerId: player.id, combination: player.detectedCombination });
+      io.to(this.name).emit("combinationDetected", { playerId: player.id, combination: player.detectedCombination });
     }
 
 
@@ -755,10 +756,10 @@ module.exports = class Room {
     if(player.hand.length != 8 && (card.suit == this.playedCards[0].card.suit || this.playedCards.length == 0) && ((card.rank == 'Q' && player.hand.some(c => c.suit == card.suit && c.rank == 'K')) || 
       card.rank == 'K' && player.hand.some(c => c.suit == card.suit && c.rank == 'Q'))) {
       player.detectedCombination.push({ type: "belot", suit: card.suit, bonus: 20, isChecked: true });
-      io.to(this.id).emit('announceBelot', {playerId: player.id, combination: [{ type: "belot", suit: card.suit, bonus: 20, isChecked: true }]});
+      io.to(this.name).emit('announceBelot', {playerId: player.id, combination: [{ type: "belot", suit: card.suit, bonus: 20, isChecked: true }]});
     }
     this.turnIndex = (this.turnIndex + 1) % 4;
-    io.to(this.id).emit("cardPlayed", { room: this, playedCards: this.playedCards });
+    io.to(this.name).emit("cardPlayed", { room: this, playedCards: this.playedCards });
     
     if (this.playedCards.length === 4) {
       setTimeout(() => {
@@ -768,7 +769,7 @@ module.exports = class Room {
         this.turnIndex = trickWinnerIndex;
         this.playedCards = [];
         this.tricksPlayed++;
-        io.to(this.id).emit("trickCompleted", { room: this, playedCards: [] });
+        io.to(this.name).emit("trickCompleted", { room: this, playedCards: [] });
         if (this.tricksPlayed === 8) {
           this.lastHandTeam = winningPlayer.team;
           if (this.players.every(p => p.detectedCombination !== undefined)) {

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useSocket } from "../contexts/SocketContext"
 
 
-const useGameSocket = ({setRoom, setPlayers, player, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit}) => {
+const useGameSocket = ({setRoom, setPlayers, userIndex, setUserIndex, player, setPlayer, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit}) => {
     const {socket} = useSocket();
 
     const setPlayerHand = (pl, room) => {
@@ -25,7 +25,9 @@ const useGameSocket = ({setRoom, setPlayers, player, setCards, setTableCards, se
             setShowAnnouncements(false);
             setRoom(data.room);
             setCards([]);
-            setISplit(data.room.dealingPlayerIndex !== undefined && data.room.players[data.room.dealingPlayerIndex]?.id === player.id)
+            console.log(data.room.players, player);
+            setISplit(data.room.dealingPlayerIndex !== undefined && data.room.players[data.room.dealingPlayerIndex].id == player.id)
+            console.log(data.room.dealingPlayerIndex !== undefined && data.room.players[data.room.dealingPlayerIndex].id == player.id);
         };
         const handleInitialCardsDealt = data => {
             reorderPlayers(data.room);
@@ -96,7 +98,16 @@ const useGameSocket = ({setRoom, setPlayers, player, setCards, setTableCards, se
             console.log(data);
             setRoom(data.room);
         };
+
+
+        
+
         socket.on('playerJoined', handlePlayerJoined);
+        socket.on('initPlayer', data => {
+            setPlayer(data.player);
+            const usrIndex = data.room.players.findIndex(p => p.id === data.player.id);
+            setUserIndex(usrIndex);
+        });
         socket.on('splitting', handleSplitting);
         socket.on('initialCardsDealt', handleInitialCardsDealt);
         socket.on('restCardsDealt', handleRestCardsDealt);
@@ -125,7 +136,8 @@ const useGameSocket = ({setRoom, setPlayers, player, setCards, setTableCards, se
             socket.off('announceBelot', handleAnnounceBelot);
             socket.off('announcementMade', handleAnnouncementMade);
         };
-    }, [socket, setRoom, setPlayers, player, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit]);
+    }, [socket, setRoom, setUserIndex, userIndex, setPlayer, setPlayers, player, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit]);
+    // }, [socket]);
 }
 
 export default useGameSocket;

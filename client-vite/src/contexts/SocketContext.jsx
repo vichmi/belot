@@ -7,7 +7,7 @@ const SOCKET_SERVER_URL = 'http://localhost:3001';
 export const SocketProvider = ({children}) => {
     const [socket, setSocket] = useState(null);
     useEffect(() => {
-        const newSocket = io(SOCKET_SERVER_URL);
+        const newSocket = io(SOCKET_SERVER_URL, {withCredentials: true});
         setSocket(newSocket);
         return () => {
             newSocket.disconnect();
