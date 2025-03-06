@@ -8,8 +8,10 @@ export default function Lobby() {
     const [rooms, setRooms] = useState([]);
     const [roomName, setRoomName] = useState('');
     const [roomPassword, setRoomPassword] = useState('');
+    const [sortNames, setSortNames] = useState(null);
+    const [sortPlayers, setSortPlayers] = useState(null);
 
-    useEffect(() => {
+    const getRooms = () => {
         axios.get('/game/rooms')
         .then(({data}) => {
             setRooms(data.rooms);
@@ -17,6 +19,10 @@ export default function Lobby() {
         .catch(err => {
             console.log(err);
         });
+    }
+
+    useEffect(() => {
+        getRooms();
     }, []);
 
     const joinRoom = (room, password) => {
@@ -40,6 +46,20 @@ export default function Lobby() {
     };
 
 
+    const sortByRoomName = () => {
+        const newRooms = [...rooms];
+        const wasNull = sortNames == null;
+        setSortNames(!sortNames);
+        setSortPlayers(null);
+        setRooms(newRooms.sort((a, b) => sortNames == true ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)));
+    };
+    const sortByRoomPlayers = () => {
+        const newRooms = [...rooms];
+        setSortPlayers(!sortPlayers)
+        setSortNames(null);
+        setRooms(newRooms.sort((a, b) => sortPlayers == true ? a.joinedPlayers - b.joinedPlayers : b.joinedPlayers - a.joinedPlayers));
+    };
+
   return (
     <div className='Lobby text-center'>
         <h1 className='mb-20'>Lobby</h1>
@@ -52,10 +72,10 @@ export default function Lobby() {
             </colgroup>
             <thead className='text-sx text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400'>
                 <tr>
-                    <th className='p-3'>Name</th>
-                    <th>Players</th>
-                    <th>Password</th>
-                    <th>Join</th>
+                    <th className='p-3'><button onClick={() => {sortByRoomName()}}>Name {sortNames != null ? sortNames == 0 ? '↑' : '>' : ''}</button></th>
+                    <th><button onClick={() => sortByRoomPlayers()}>Players</button></th>
+                    <th><button>Password</button></th>
+                    <th><button onClick={() => {getRooms();}}>Refresh</button></th>
                 </tr>
             </thead>
             <tbody>

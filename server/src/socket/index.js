@@ -87,6 +87,7 @@ module.exports = {
 
     socket.on('saveCombinations', ({combinations}) => {
       if (playerRoom && player) {
+        console.log(combinations);
         combinations.forEach(element => {
           playerRoom.announceCombination(player.id, element, io);
         });

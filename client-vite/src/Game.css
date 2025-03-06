@@ -45,23 +45,23 @@ body, html {
     transform: translateX(-50%); */
 /* } */
 .player0 {
-    bottom: 10%;
+    bottom: 0;
     left: 50%;
 }
 
 .player1 {
-    right: 5%;
+    right: 0;
     top: 50%;
     transform: translateY(-50%);
 }
 
 .player2 {
-    top: 7%;
+    top: 0;
     left: 50%;
 }
 
 .player3 {
-    left: 5%;
+    left: 0;
     top: 50%;
     transform: translateY(-50%);
 }
@@ -138,6 +138,10 @@ body, html {
     align-items: center;
     background-color: rgb(40, 148, 40);
     border-radius: 50%;
+}
+
+.card-relative {
+    margin-bottom: 50px;
 }
 
 .table-card {
@@ -222,12 +226,11 @@ body, html {
     width: 180px;
 }
 
-
 @keyframes fadeInOpacity {
 	0% {
 		opacity: 0;
 	}
-	100% {
+	50% {
 		opacity: 80%;
 	}
 }

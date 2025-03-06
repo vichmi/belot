@@ -47,7 +47,6 @@ export default function Game() {
   }, [socket]);
 
   useGameSocket({setRoom, setPlayers, userIndex, setUserIndex, player, setPlayer, setCards, setTableCards, setShowAnnouncements, reorderPlayers, setCombinations, setShowCombinationBox, setShowRoundScore, setRoundPoints, setCollectTrick, setFirstPlacedCard, setISplit});
-  // console.log(room);
   return Object.keys(room).length == 0 ? <span>Loading</span> : (
     <div className="Game">
       { players.length === 4 ?

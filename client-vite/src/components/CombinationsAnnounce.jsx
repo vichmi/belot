@@ -6,9 +6,8 @@ export default function CombinationsAnnounce({combinations, setCombinations, set
     const {socket} = useSocket();
     const [showModal, setShowModal] = useState(true);
     const sendWantedAnnounce = () => {
-        console.log(combinations)
         socket.emit('saveCombinations', {combinations: combinations.filter(c => c.isChecked == true)});
-        setShowModal(false);
+        setShowCombinationBox(false);
     }
 
     const updateCombination = (index) => {
@@ -45,7 +44,7 @@ return (
           {/* Overlay */}
           <div
             className="absolute inset-0 bg-black opacity-50"
-            onClick={() => setShowModal(false)}
+            onClick={() => setShowCombinationBox(false)}
           ></div>
           {/* Modal content */}
           <div className="relative bg-white rounded-lg shadow-lg p-6 w-11/12 max-w-md z-10 flex flex-col justify-between h-1/5">
@@ -83,7 +82,7 @@ return (
               <button
                 type="button"
                 className="bg-red-500 hover:bg-red-400 text-white font-medium py-2 px-4 rounded"
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowCombinationBox(false)}
               >
                 Cancel
               </button>

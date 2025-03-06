@@ -25,9 +25,9 @@ const useGameSocket = ({setRoom, setPlayers, userIndex, setUserIndex, player, se
             setShowAnnouncements(false);
             setRoom(data.room);
             setCards([]);
-            console.log(data.room.players, player);
+            // console.log(data.room.players, player);
             setISplit(data.room.dealingPlayerIndex !== undefined && data.room.players[data.room.dealingPlayerIndex].id == player.id)
-            console.log(data.room.dealingPlayerIndex !== undefined && data.room.players[data.room.dealingPlayerIndex].id == player.id);
+            // console.log(data.room.dealingPlayerIndex !== undefined && data.room.players[data.room.dealingPlayerIndex].id == player.id);
         };
         const handleInitialCardsDealt = data => {
             reorderPlayers(data.room);
@@ -69,6 +69,7 @@ const useGameSocket = ({setRoom, setPlayers, userIndex, setUserIndex, player, se
                   totalPoints: data.totalPoints.EW
                 }
             });
+            // console.log(data.room);
             setTimeout(() => {
                 setRoundPoints({});
                 setShowRoundScore(false);
@@ -92,10 +93,11 @@ const useGameSocket = ({setRoom, setPlayers, userIndex, setUserIndex, player, se
         const handleAnnounceBelot = data => {
             if(data.playerId != player.id) {return;}
             setCombinations(data.combination);
+            // console.log('belot');
             setShowCombinationBox(true);
         };
         const handleAnnouncementMade = data => {
-            console.log(data);
+            // console.log(data);
             setRoom(data.room);
         };
 

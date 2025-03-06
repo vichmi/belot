@@ -341,20 +341,16 @@ module.exports = class Room {
   calculateCombinationBonuses() {
     let bonus = {NS: 0, EW: 0};
     const rankOrder = ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-    const squareOrder = ['Q', 'K', '10', 'A', '9', 'J']
-    let highestTeamAnnouncement = {NS: {}, EW: {}};
-    let highTeamSquare = {NS: {}, EW: {}};
+    const squareOrder = ['Q', 'K', '10', 'A', '9', 'J'];
+    
+    let highestTeamAnnouncement = {NS: {bonus: 0, highestCardRank: '7'}, EW: {bonus: 0, highestCardRank: '7'}};
+    let highTeamSquare = {NS: {rank: 'J'}, EW: {rank: 'J'}};
 
     function sortCombinations(a, b) {
-      if(a.bonus == b.bonus) {
-        if(rankOrder.indexOf(a.highestCardRank) == rankOrder.indexOf(b.highestCardRank)) {
-          return;
-        }else{
-          return rankOrder.indexOf(b.highestCardRank) - rankOrder.indexOf(a.highestCardRank);
-        }
-      }else{
-        return b.bonus - a.bonus;
+      if (a.bonus === b.bonus) {
+        return rankOrder.indexOf(b.highestCardRank) - rankOrder.indexOf(a.highestCardRank);
       }
+      return b.bonus - a.bonus;
     }
 
     function sortSquares(a, b) {
@@ -362,68 +358,69 @@ module.exports = class Room {
     }
 
     ['NS', 'EW'].forEach(team => {
-      if(this.combinationAnnouncements[team].length > 0) {
-        let combos = this.combinationAnnouncements[team].filter(c => !c.type.startsWith('square') && c.type != 'belot');
-        let squares = this.combinationAnnouncements[team].filter(c => c.type.startsWith('square') && c.type != 'belot');
-        console.log(combos)
-        highestTeamAnnouncement[team] = combos.sort(sortCombinations)[0];
-        highTeamSquare[team] = squares.sort(sortSquares)[0];
-      }
+        let teamCombos = this.combinationAnnouncements[team] || [];
+        let combos = teamCombos.filter(c => !c.type.startsWith('square') && c.type !== 'belot');
+        let squares = teamCombos.filter(c => c.type.startsWith('square') && c.type !== 'belot');
+
+        if (combos.length > 0) {
+            highestTeamAnnouncement[team] = combos.sort(sortCombinations)[0];
+        }
+        if (squares.length > 0) {
+            highTeamSquare[team] = squares.sort(sortSquares)[0];
+        }
     });
-    // console.log(highestTeamAnnouncement)
-    if(highestTeamAnnouncement['NS'].bonus == highestTeamAnnouncement['EW'].bonus && highestTeamAnnouncement['NS'].highestCardRank == highestTeamAnnouncement['EW'].highestCardRank) {
-      bonus = {NS: 0, EW: 0};
-    }else{
-      ['NS', 'EW'].forEach(team => {
-        let initalTeam = team;
-        let otherTeam = team == 'NS' ? 'EW' : 'NS';
-        // console.log(highestTeamAnnouncement[initalTeam])
-        if((highestTeamAnnouncement[initalTeam].bonus > highestTeamAnnouncement[otherTeam].bonus && highestTeamAnnouncement[otherTeam].bonus != undefined) || 
-        (highestTeamAnnouncement[initalTeam].bonus != undefined && highestTeamAnnouncement[otherTeam].bonus == undefined) ||
-        (highestTeamAnnouncement[initalTeam].bonus == highestTeamAnnouncement[otherTeam].bonus && rankOrder.indexOf(highestTeamAnnouncement[initalTeam].highestCardRank) > rankOrder.indexOf(highestTeamAnnouncement[otherTeam].highestCardRank))
-      ) {
-          bonus[initalTeam] += this.combinationAnnouncements[initalTeam].reduce((acc, combo) => {
-            if(!combo.type.startsWith('square')) {
-              return acc + combo.bonus;
-            }
-            return acc;
-          }, 0);
-        }
-      });
+
+    if (highestTeamAnnouncement['NS'].bonus === highestTeamAnnouncement['EW'].bonus &&
+        highestTeamAnnouncement['NS'].highestCardRank === highestTeamAnnouncement['EW'].highestCardRank) {
+        return bonus;
     }
-    if(highTeamSquare['NS'] != undefined && highTeamSquare['EW'] != undefined) {
-      if(squareOrder.indexOf(highTeamSquare['NS'].rank) > squareOrder.indexOf(highTeamSquare['EW'].rank)) {
-        bonus['NS'] += this.combinationAnnouncements['NS'].reduce((acc, combo) => {
-          if(combo.type.startsWith('square')) {
-            return acc + combo.bonus;
-          }
-          return acc;
-        }, 0);
-      }else{
-        bonus['EW'] += this.combinationAnnouncements['EW'].reduce((acc, combo) => {
-          if(combo.type.startsWith('square')) {
-            return acc + combo.bonus;
-          }
-          return acc;
-        }, 0);
-      }
-    }else if(highTeamSquare['NS'] != undefined && highTeamSquare['EW'] == undefined) {
-      bonus['NS'] += this.combinationAnnouncements['NS'].reduce((acc, combo) => {
-        if(combo.type.startsWith('square')) {
-          return acc + combo.bonus;
+    ['NS', 'EW'].forEach(team => {
+        let otherTeam = team === 'NS' ? 'EW' : 'NS';
+
+        if ((highestTeamAnnouncement[team].bonus > highestTeamAnnouncement[otherTeam].bonus) ||
+            (highestTeamAnnouncement[team].bonus !== undefined && highestTeamAnnouncement[otherTeam].bonus === undefined) ||
+            (highestTeamAnnouncement[team].bonus === highestTeamAnnouncement[otherTeam].bonus &&
+             rankOrder.indexOf(highestTeamAnnouncement[team].highestCardRank) >
+             rankOrder.indexOf(highestTeamAnnouncement[otherTeam].highestCardRank))) {
+            
+            bonus[team] += (this.combinationAnnouncements[team] || []).reduce((acc, combo) => {
+                return !combo.type.startsWith('square') && combo.type != 'belot' ? acc + combo.bonus : acc;
+            }, 0);
         }
-        return acc;
-      }, 0);
-    }else if(highTeamSquare['EW'] != undefined && highTeamSquare['NS'] == undefined) {
-      bonus['EW'] +=  this.combinationAnnouncements['EW'].reduce((acc, combo) => {
-        if(combo.type.startsWith('square')) {
-          return acc + combo.bonus;
+    });
+
+    if (highTeamSquare['NS'] && highTeamSquare['EW']) {
+        if (squareOrder.indexOf(highTeamSquare['NS'].rank) > squareOrder.indexOf(highTeamSquare['EW'].rank)) {
+            bonus['NS'] += (this.combinationAnnouncements['NS'] || []).reduce((acc, combo) => {
+                return combo.type.startsWith('square') ? acc + combo.bonus : acc;
+            }, 0);
+        } else {
+            bonus['EW'] += (this.combinationAnnouncements['EW'] || []).reduce((acc, combo) => {
+                return combo.type.startsWith('square') ? acc + combo.bonus : acc;
+            }, 0);
         }
-        return acc;
-      }, 0);
+    } else if (highTeamSquare['NS']) {
+        bonus['NS'] += (this.combinationAnnouncements['NS'] || []).reduce((acc, combo) => {
+            return combo.type.startsWith('square') ? acc + combo.bonus : acc;
+        }, 0);
+    } else if (highTeamSquare['EW']) {
+        bonus['EW'] += (this.combinationAnnouncements['EW'] || []).reduce((acc, combo) => {
+            return combo.type.startsWith('square') ? acc + combo.bonus : acc;
+        }, 0);
     }
+
+    ['NS','EW'].map((team, index) => {
+        this.combinationAnnouncements[team].map((combo, indx) => {
+          if(combo.type == 'belot') {
+            bonus[team] += 20;
+          }
+        });
+    });
+
+    
     return bonus;
-  }
+}
+
 
    // NEW: Detect combinations for a single player.
   detectCombinationForPlayer(player) {
@@ -503,10 +500,13 @@ module.exports = class Room {
         }
         return 0;
       });
-      finalCombos[team] = teamCombos[0];
+      finalCombos[team] = teamCombos;
     });
-    this.finalCombination = finalCombos;
-    io.to(this.name).emit("finalCombination", { finalCombination: this.finalCombination });
+    this.finalCombinationAnnouncements = finalCombos;
+    console.log(this.combinationAnnouncements);
+    console.log('--------------------------------------------------------------------------');
+    console.log(this.finalCombinationAnnouncements);
+    io.to(this.name).emit("finalCombination", { finalCombination: this.finalCombinationAnnouncements });
   }
 
 
@@ -741,7 +741,7 @@ module.exports = class Room {
     // NEW: If this is the first card the player is playing in the round,
     // detect and emit his combination.
     if (player.hand.length === 8 && player.detectedCombination === undefined) {
-      player.detectedCombination = this.detectCombinationForPlayer(player);
+      player.detectedCombination = this.detectCombinationForPlayer(player) || [];
       if((this.playedCards.length == 0 || card.suit == this.playedCards[0].card.suit) && ((card.rank == 'Q' && player.hand.some(c => c.suit == card.suit && c.rank == 'K')) || 
         card.rank == 'K' && player.hand.some(c => c.suit == card.suit && c.rank == 'Q'))) {
         player.detectedCombination.push({ type: "belot", suit: card.suit, bonus: 20, isChecked: true });
@@ -750,14 +750,15 @@ module.exports = class Room {
     }
 
 
-    // Remove the card from the player's hand.
-    player.hand = player.hand.filter(c => !(c.suit === card.suit && c.rank === card.rank));
     this.playedCards.push({ playerId, card });
     if(player.hand.length != 8 && (card.suit == this.playedCards[0].card.suit || this.playedCards.length == 0) && ((card.rank == 'Q' && player.hand.some(c => c.suit == card.suit && c.rank == 'K')) || 
-      card.rank == 'K' && player.hand.some(c => c.suit == card.suit && c.rank == 'Q'))) {
-      player.detectedCombination.push({ type: "belot", suit: card.suit, bonus: 20, isChecked: true });
-      io.to(this.name).emit('announceBelot', {playerId: player.id, combination: [{ type: "belot", suit: card.suit, bonus: 20, isChecked: true }]});
+      (card.rank == 'K' && player.hand.some(c => c.suit == card.suit && c.rank == 'Q')))) {
+        console.log('BELOT')
+        player.detectedCombination.push({ type: "belot", suit: card.suit, bonus: 20, isChecked: true });
+        io.to(this.name).emit('combinationDetected', {playerId: player.id, combination: [{ type: "belot", suit: card.suit, bonus: 20, isChecked: true }]});
     }
+    player.hand = player.hand.filter(c => !(c.suit === card.suit && c.rank === card.rank));
+    // Remove the card from the player's hand.
     this.turnIndex = (this.turnIndex + 1) % 4;
     io.to(this.name).emit("cardPlayed", { room: this, playedCards: this.playedCards });
     
@@ -766,6 +767,11 @@ module.exports = class Room {
         const trickWinnerIndex = this.determineTrickWinner();
         const winningPlayer = this.players[trickWinnerIndex];
         this.capturedCards[winningPlayer.team].push(...this.playedCards.map(play => play.card));
+        let res = 0;
+        for(let c of this.capturedCards[winningPlayer.team]) {
+          res += this.getCardValue(c);
+        }
+        console.log(`${winningPlayer.team} has ${res}`)
         this.turnIndex = trickWinnerIndex;
         this.playedCards = [];
         this.tricksPlayed++;
