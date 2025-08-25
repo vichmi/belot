@@ -1,10 +1,6 @@
 # Belot
 A web-based implementation of the bulgarian playing cards game "Belot". The main idea of the project was to play belot online for free with your friends. 
 
-## Here your can test it
-https://belot-client-production.up.railway.app/ \
-**KEEP IN MIND I AM USING FREE SERVICES(client-side hosting, server-side hosting and database) SO DON'T SHARE VULNERABLE INFORMATION!**
-
 ## Installation 
   1. Clone the repo
      ```
