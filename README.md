@@ -28,6 +28,19 @@ A web-based implementation of the bulgarian playing cards game "Belot". The main
        ```
       Open the dist folder and start a http server there
 
+
+## Setup environment variables
+Go in the `server` folder and create a `.env` file. Copy paste these and fill with your desired variables: \
+```
+PORT = 3001
+DB_HOST = 
+DB_USER = 
+DB_PASSWORD = 
+DB_NAME = 
+JWT_SECRET= 
+SERVER_URL = 
+```
+
 ## Usage
 After you have created an account create a room and refresh either the page or from the table. Join the room. If you open a new tab and you are in the lobby page and try to join the room it wouldn't allow it. For testing instead copy the room url and open 4 tabs in total
 and enjoy.
