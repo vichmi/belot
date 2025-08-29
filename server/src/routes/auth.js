@@ -5,16 +5,20 @@ const jwt = require('jsonwebtoken');
 
 router.post('/register', (req, res) => {
     const {username, password} = req.body;
-    const salt = bcrypt.genSaltSync(10);
-    const hash = bcrypt.hashSync(password, salt);
-    const query = `INSERT INTO users (username, password) VALUES ('${username}', '${hash}')`;
-    db.query(query, (err, result) => {
-        if(err) {
-            res.status(500).send(err);
-        }else{ 
-            res.status(200).send(result);
-        }
-    });
+    bcrypt.genSalt(10, (err, salt) => {
+        bcrypt.hash(password, salt, (err, hash) => {
+            const query = `INSERT INTO users (username, password) VALUES ('${username}', '${hash}')`;
+            db.query(query, (err, result) => {
+                if(err) {
+                    res.status(500).send(err);
+                }else{ 
+                    res.status(200).send(result);
+                }
+            });
+        });
+    }); 
+    // const salt = bcrypt.genSaltSync(10);
+    // const hash = bcrypt.hashSync(password, salt);
 });
 
 router.post('/login', (req, res) => {

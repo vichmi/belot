@@ -75,7 +75,7 @@ export default function PlayerComponent({
             index === 2 || index === 0 ? 'translateX(-50%)' : ''
           } rotate(${mainAngleRotate}deg)`,
         }}>
-        {player.hand.length > 0 &&
+        {player.hand.length > 0 && index == 0 &&
           player.hand.map((card, idx) => {
             const maxAngle = 15;
             const mid = (player.hand.length - 1) / 2;

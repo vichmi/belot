@@ -31,6 +31,11 @@ module.exports = {
           }
         });
         playerRoom = new Room(roomName);
+        if(playerRoom.players.some((p, index) => p.id == jwt.decode(token).username)) {
+          console.log('peeedal')
+          socket.emit('error', {message: 'Already joined here'})
+          return;
+        }
         activeRooms[roomName] = playerRoom;
         // db.query(`update rooms set name = '${roomName}', state = '${JSON.stringify(playerRoom)}', joinedPlayers = '1')`, (err, res) => {
         //   if(err) {

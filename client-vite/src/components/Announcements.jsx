@@ -30,7 +30,7 @@ export default function Announcements({ room, player }) {
   };
 
   return (
-    <div className="announcements-container text-black">
+    <div className="text-white flex bg-gray-700">
       {announcementOptions.map((ann, index) => {
         let isDisabled = false;
         if (ann.value !== 'pass') {
@@ -48,7 +48,7 @@ export default function Announcements({ room, player }) {
         return (
           <div
             key={index}
-            className={`announcement-container ${isDisabled ? 'non-active' : ''}`}
+            className={`flex flex-col w-[80px] items-center text-center border border-black hover:bg-gray-600 cursor-pointer`}
             onClick={() => {
               if (!isDisabled) {
                 selectAnnouncement(ann.value);
@@ -63,9 +63,9 @@ export default function Announcements({ room, player }) {
                 alt={ann.display}
               />
             ) : ann.value === 'no trumps' ? (
-              <span className="announcements-title">A</span>
+              <span className="text-5xl">A</span>
             ) : ann.value === 'all trumps' ? (
-              <span className="announcements-title">J</span>
+              <span className="text-5xl">J</span>
             ) : null}
             <span className="announcements-span">{ann.display}</span>
           </div>

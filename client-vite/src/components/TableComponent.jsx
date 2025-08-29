@@ -18,6 +18,7 @@ export default function TableComponent({room, collectTrick, tableCards, players,
                     className={`card-placement${pos} table-card ${winnerClass}`}
                     src={`../assets/${play.card.rank.toLowerCase()}_of_${play.card.suit.toLowerCase()}.png`}
                     alt={`${play.card.rank} ${play.card.suit}`}
+                    style={{zIndex: 999}}
                     width={60}
                     height={80}
                     onAnimationEnd={() => {
