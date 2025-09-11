@@ -357,6 +357,16 @@ module.exports = class Room {
       return squareOrder.indexOf(b.rank) - squareOrder.indexOf(a.rank);
     }
 
+    // 1) Add belot bonuses (once)
+    ['NS','EW'].forEach(team => {
+      (this.combinationAnnouncements[team] || []).forEach(combo => {
+        if (combo.type === 'belot') {
+          bonus[team] += 20;
+        }
+      });
+    });
+
+    // 2) Determine highest announcement (non-square, non-belot) and highest square per team
     ['NS', 'EW'].forEach(team => {
         let teamCombos = this.combinationAnnouncements[team] || [];
         let combos = teamCombos.filter(c => !c.type.startsWith('square') && c.type !== 'belot');
@@ -370,10 +380,13 @@ module.exports = class Room {
         }
     });
 
+    // 3) If both teams have identical top announcement (bonus and highest card), no one gets these announcement points
     if (highestTeamAnnouncement['NS'].bonus === highestTeamAnnouncement['EW'].bonus &&
         highestTeamAnnouncement['NS'].highestCardRank === highestTeamAnnouncement['EW'].highestCardRank) {
         return bonus;
     }
+
+    // 4) Award non-square announcement bonuses to the winning team (once)
     ['NS', 'EW'].forEach(team => {
         let otherTeam = team === 'NS' ? 'EW' : 'NS';
 
@@ -389,6 +402,7 @@ module.exports = class Room {
         }
     });
 
+    // 5) Award square bonuses to the team with the highest square
     if (highTeamSquare['NS'] && highTeamSquare['EW']) {
         if (squareOrder.indexOf(highTeamSquare['NS'].rank) > squareOrder.indexOf(highTeamSquare['EW'].rank)) {
             bonus['NS'] += (this.combinationAnnouncements['NS'] || []).reduce((acc, combo) => {
@@ -409,17 +423,8 @@ module.exports = class Room {
         }, 0);
     }
 
-    ['NS','EW'].map((team, index) => {
-        this.combinationAnnouncements[team].map((combo, indx) => {
-          if(combo.type == 'belot') {
-            bonus[team] += 20;
-          }
-        });
-    });
-
-    
     return bonus;
-}
+  }
 
 
    // NEW: Detect combinations for a single player.

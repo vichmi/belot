@@ -22,7 +22,7 @@ router.post('/createRoom', (req, res) => {
       }else{
          if(result[0]['count(*)'] == 0){
             const room = new Room(req.body.name);
-            const query = `insert into rooms (name, state, password, requiresPassword) values ('${req.body.name}', '${JSON.stringify(room)}', '${req.body.password}', '${req.body.password ? 1 : 0}')`;
+            const query = `insert into rooms (name, state, password, requiresPassword) values ('${req.body.name}', '${JSON.stringify(room)}', '${req.body.password}', '${req.body.password.length > 0  ? 1 : 0}')`;
             db.query(query, (err, ress) => {
                if(err) {
                   console.log(err)
@@ -55,7 +55,8 @@ router.post('/joinRoom', (req, res) => {
       if(result[0].joinedPlayers >= 4){
          return res.status(500).send('Room is full.');
       }
-      const roomState = JSON.parse(result[0].state);
+      console.log(result[0].state)
+      const roomState = result[0].state
       if(roomState.players.filter(p => p.id == jwt.decode(token).username).length > 0) {
          return res.status(500).send('You have already joined this game.');
       }

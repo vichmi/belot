@@ -10,6 +10,7 @@ router.post('/register', (req, res) => {
             const query = `INSERT INTO users (username, password) VALUES ('${username}', '${hash}')`;
             db.query(query, (err, result) => {
                 if(err) {
+                    console.log(err)
                     res.status(500).send(err);
                 }else{ 
                     res.status(200).send(result);
