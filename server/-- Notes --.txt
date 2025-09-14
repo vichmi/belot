@@ -1,0 +1,3 @@
+-- Notes --
+1. Using a space in the username directs to new username
+2.

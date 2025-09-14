@@ -1,12 +1,10 @@
 // src/components/Announcements.jsx
 import React from 'react';
 import { useSocket } from '../contexts/SocketContext';
-// import { socket } from '../lib/socket';
-
 
 export default function Announcements({ room, player }) {
-  // Define each announcement option with a display name and normalized value.
-  const {socket} = useSocket();
+  const { socket } = useSocket();
+
   const announcementOptions = [
     { display: 'Clubs', value: 'clubs' },
     { display: 'Diamonds', value: 'diamonds' },
@@ -17,58 +15,67 @@ export default function Announcements({ room, player }) {
     { display: 'Pass', value: 'pass' },
   ];
 
-  // Valid order for comparing bids.
   const validOrder = ['clubs', 'diamonds', 'hearts', 'spades', 'no trumps', 'all trumps'];
 
-  // Determine the current highest (non-pass) announcement.
-  const nonPassAnnouncements = room.announcements ? room.announcements.filter(a => a !== 'pass') : [];
-  const currentHighest = nonPassAnnouncements.length > 0 ? nonPassAnnouncements[nonPassAnnouncements.length - 1] : null;
+  const nonPassAnnouncements = room.announcements
+    ? room.announcements.filter(a => a !== 'pass')
+    : [];
+
+  const currentHighest =
+    nonPassAnnouncements.length > 0
+      ? nonPassAnnouncements[nonPassAnnouncements.length - 1]
+      : null;
 
   const selectAnnouncement = (announcementValue) => {
-    console.log("Announcing:", announcementValue);
     socket.emit('announce', announcementValue);
   };
 
   return (
-    <div className="text-white flex bg-gray-700">
+    <div className="flex flex-row space-x-4 p-4 bg-gray-800 rounded-xl shadow-lg justify-center">
       {announcementOptions.map((ann, index) => {
         let isDisabled = false;
         if (ann.value !== 'pass') {
           if (currentHighest) {
-            // Disable options that are not higher than the current highest bid.
             if (validOrder.indexOf(ann.value) <= validOrder.indexOf(currentHighest)) {
               isDisabled = true;
             }
           }
-          // Also disable if this bid has already been announced.
           if (room.announcements && room.announcements.includes(ann.value)) {
             isDisabled = true;
           }
         }
+
         return (
-          <div
+          <button
             key={index}
-            className={`flex flex-col w-[80px] items-center text-center border border-black hover:bg-gray-600 cursor-pointer`}
-            onClick={() => {
-              if (!isDisabled) {
-                selectAnnouncement(ann.value);
+            disabled={isDisabled}
+            onClick={() => !isDisabled && selectAnnouncement(ann.value)}
+            className={`
+              flex flex-col items-center justify-center w-[90px] h-[120px] rounded-xl border-2 
+              transition-all duration-200
+              ${isDisabled
+                ? 'opacity-40 cursor-not-allowed border-gray-500 bg-gray-700'
+                : 'cursor-pointer border-gray-600 hover:bg-gray-700 hover:scale-105'
               }
-            }}
+            `}
           >
             {index <= 3 ? (
               <img
                 src={`/assets/a_of_${ann.value}.png`}
                 width={50}
-                height={80}
+                height={70}
                 alt={ann.display}
+                className="drop-shadow"
               />
             ) : ann.value === 'no trumps' ? (
-              <span className="text-5xl">A</span>
+              <span className="text-4xl font-bold">NT</span>
             ) : ann.value === 'all trumps' ? (
-              <span className="text-5xl">J</span>
+              <span className="text-4xl font-bold">AT</span>
+            ) : ann.value === 'pass' ? (
+              <span className="text-lg font-semibold text-red-400">PASS</span>
             ) : null}
-            <span className="announcements-span">{ann.display}</span>
-          </div>
+            <span className="mt-2 text-sm font-medium">{ann.display}</span>
+          </button>
         );
       })}
     </div>

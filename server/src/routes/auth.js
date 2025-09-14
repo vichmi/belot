@@ -58,6 +58,16 @@ router.post('/login', (req, res) => {
     });
 });
 
+router.post('/logout', (req, res) => {
+    console.log('Logging out');
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'strict'
+    });
+    res.status(200).json({ message: 'Logged out successfully' });
+});
+
 router.get('/me', (req, res) => {
     const token = req.cookies.token;
     if(token) {
@@ -72,5 +82,6 @@ router.get('/me', (req, res) => {
         res.status(403).send('Token not found');
     }
 });
+
 
 module.exports = router;

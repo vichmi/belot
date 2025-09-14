@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useSocket } from '../contexts/SocketContext';
 import { useNavigate } from 'react-router';
 import axios from '../libs/axios';
+import ProfileMenu from '../components/ProfileMenu';
 
 export default function Lobby() {
     const navigate = useNavigate();
@@ -10,6 +11,7 @@ export default function Lobby() {
     const [roomPassword, setRoomPassword] = useState('');
     const [sortNames, setSortNames] = useState(null);
     const [sortPlayers, setSortPlayers] = useState(null);
+    const [user, setUser] = useState({});
 
     const getRooms = () => {
         axios.get('/game/rooms')
@@ -106,6 +108,8 @@ export default function Lobby() {
                 </tr>
             </tfoot>
         </table>
+
+        <ProfileMenu />
     </div>
   )
 }
